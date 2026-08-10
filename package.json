@@ -1,0 +1,17 @@
+{
+  "name": "n8n-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Painel de alerta para instâncias n8n: erros agrupados, execuções travadas e conferência de agendamentos (configurado × executou)",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "diag": "node scripts/diag-exec.mjs",
+    "dump": "node scripts/dump-wf.mjs"
+  },
+  "dependencies": {},
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor n8n ATM</title>
+<style>
+  :root{
+    --sup:#fbfbfc; --cartao:#ffffff; --linha:#e4e7ea;
+    --ink:#101316; --ink2:#4d545b; --ink3:#828b93;
+    --calmo:#2f6fd0; --bom:#2c7a52; --atencao:#a06507; --ruim:#c0392b;
+    /* o ponto pode ser mais vivo que o texto: forma nao precisa passar em contraste de leitura */
+    --pontoBom:#28a862; --pontoAtencao:#f2c014; --pontoRuim:#e0402c;
+    --grid:#eaedf0;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --sup:#101316; --cartao:#171b1f; --linha:#282e34;
+      --ink:#eef0f2; --ink2:#a9b1b9; --ink3:#79828b;
+      --calmo:#6fa8f5; --bom:#5cbd8a; --atencao:#e8bc4e; --ruim:#f0745c;
+      --pontoBom:#43c98a; --pontoAtencao:#f5cf3d; --pontoRuim:#f4614a;
+      --grid:#232930;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--sup);color:var(--ink);
+    font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 20px 70px}
+
+  /* ---------- barra superior mínima ---------- */
+  .barra{display:flex;align-items:center;gap:14px;margin-bottom:20px;color:var(--ink3);font-size:12.5px}
+  .cresce{flex:1}
+
+  /* status classificado: cor + nome, pulsando junto */
+  #status{display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:700;
+    letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+  #status .ponto{width:9px;height:9px;border-radius:50%;flex:none;position:relative;
+    background:currentColor;color:var(--ink3)}
+  #status .ponto::after{content:'';position:absolute;inset:0;border-radius:50%;
+    background:currentColor;animation:anel 2s cubic-bezier(.2,.6,.3,1) infinite}
+  @keyframes anel{0%{transform:scale(1);opacity:.5}70%,100%{transform:scale(2.9);opacity:0}}
+  #status.ok{color:var(--bom)}          #status.ok .ponto{color:var(--pontoBom)}
+  #status.atencao{color:var(--atencao)} #status.atencao .ponto{color:var(--pontoAtencao)}
+  #status.ruim{color:var(--ruim)}       #status.ruim .ponto{color:var(--pontoRuim)}
+  #status.pausado{color:var(--ink3)}    #status.pausado .ponto::after{animation:none}
+  @media (prefers-reduced-motion: reduce){ #status .ponto::after{animation:none} }
+  button{font:inherit;font-size:13px;color:var(--ink2);background:transparent;
+    border:1px solid var(--linha);border-radius:7px;padding:5px 10px;cursor:pointer}
+  button:hover{color:var(--ink);border-color:var(--ink3)}
+
+  /* ---------- veredito gigante ---------- */
+  .hero{border-radius:16px;padding:30px 32px;margin-bottom:22px;border:1px solid var(--linha);
+    background:var(--cartao);display:flex;align-items:center;gap:24px}
+  .hero .icone{font-size:52px;line-height:1}
+  .hero .n{font-size:56px;font-weight:680;letter-spacing:-.035em;line-height:1}
+  .hero .txt{font-size:19px;font-weight:600;letter-spacing:-.012em}
+  .hero .sub{color:var(--ink2);font-size:14px;margin-top:4px}
+  .hero.ok{background:color-mix(in oklab,var(--bom) 9%,var(--cartao));
+    border-color:color-mix(in oklab,var(--bom) 32%,transparent)}
+  .hero.ok .txt{color:var(--bom)}
+  .hero.atencao{background:color-mix(in oklab,var(--atencao) 11%,var(--cartao));
+    border-color:color-mix(in oklab,var(--atencao) 38%,transparent)}
+  .hero.atencao .txt,.hero.atencao .n{color:var(--atencao)}
+  .hero.ruim{background:color-mix(in oklab,var(--ruim) 12%,var(--cartao));
+    border-color:color-mix(in oklab,var(--ruim) 42%,transparent)}
+  .hero.ruim .txt,.hero.ruim .n{color:var(--ruim)}
+
+  /* ---------- cartões de problema ---------- */
+  .prob{background:var(--cartao);border:1px solid var(--linha);border-left:4px solid var(--ink3);
+    border-radius:12px;padding:16px 18px;margin-bottom:12px}
+  .prob.ruim{border-left-color:var(--ruim)}
+  .prob.atencao{border-left-color:var(--atencao)}
+  .prob .cab{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .prob .tipo{font-size:11px;font-weight:640;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+  .prob.ruim .tipo{color:var(--ruim)} .prob.atencao .tipo{color:var(--atencao)}
+  .prob .titulo{font-size:16px;font-weight:600;letter-spacing:-.01em;margin:2px 0 0;width:100%}
+  .prob .grande{font-size:24px;font-weight:660;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .prob .det{color:var(--ink2);font-size:13.5px;margin-top:5px}
+  .prob .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;
+    color:var(--ink2);background:var(--sup);border:1px solid var(--linha);border-radius:6px;
+    padding:6px 9px;margin-top:8px;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
+  .prob .acoes{display:flex;gap:8px;margin-top:11px;align-items:center}
+  a{color:var(--calmo);text-decoration:none} a:hover{text-decoration:underline}
+
+  /* ---------- linha de saúde ---------- */
+  .saude{display:flex;flex-wrap:wrap;gap:8px 22px;padding:14px 18px;margin-bottom:14px;
+    background:var(--cartao);border:1px solid var(--linha);border-radius:12px;
+    font-size:13.5px;color:var(--ink2)}
+  .saude b{color:var(--ink);font-weight:620;font-variant-numeric:tabular-nums}
+  .saude .item{display:flex;align-items:center;gap:7px}
+
+  /* ---------- em andamento ---------- */
+  .andando{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:14px}
+  .chip{display:flex;align-items:center;gap:9px;background:var(--cartao);
+    border:1px solid var(--linha);border-radius:999px;padding:6px 14px 6px 11px;font-size:13px}
+  .chip .t{font-variant-numeric:tabular-nums;font-weight:620;color:var(--ink)}
+  .chip .nm{color:var(--ink2);max-width:34ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chip.lento{border-color:color-mix(in oklab,var(--atencao) 45%,transparent)}
+  .chip.lento .t{color:var(--atencao)}
+  .girando{width:9px;height:9px;border-radius:50%;border:2px solid var(--calmo);
+    border-top-color:transparent;animation:gira .9s linear infinite}
+  @keyframes gira{to{transform:rotate(360deg)}}
+
+  /* ---------- detalhes dobrados ---------- */
+  details{background:var(--cartao);border:1px solid var(--linha);border-radius:12px;
+    padding:0 18px;margin-bottom:12px}
+  details>summary{cursor:pointer;padding:13px 0;font-size:13.5px;font-weight:560;color:var(--ink2);
+    list-style:none;display:flex;align-items:center;gap:9px}
+  details>summary::-webkit-details-marker{display:none}
+  details>summary::before{content:'▸';color:var(--ink3);font-size:12px}
+  details[open]>summary::before{content:'▾'}
+  details>summary:hover{color:var(--ink)}
+  .corpo{padding:2px 0 18px}
+  .legenda{display:flex;gap:14px;font-size:12px;color:var(--ink2);margin:0 0 8px}
+  .amostra{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px}
+  .rolar{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-weight:560;color:var(--ink3);font-size:10.5px;
+    text-transform:uppercase;letter-spacing:.06em;padding:0 10px 7px 0;white-space:nowrap}
+  td{padding:8px 10px 8px 0;border-top:1px solid var(--linha);vertical-align:top}
+  td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:20px;
+    border:1px solid var(--linha);color:var(--ink2);white-space:nowrap}
+  .tag.ruim{color:var(--ruim);border-color:color-mix(in oklab,var(--ruim) 40%,transparent)}
+  .tag.atencao{color:var(--atencao);border-color:color-mix(in oklab,var(--atencao) 40%,transparent)}
+  .sub2{font-size:12px;color:var(--ink3);margin-top:2px}
+  .nada{color:var(--ink3);font-size:13px;padding:8px 0}
+
+  dialog{border:1px solid var(--linha);border-radius:14px;background:var(--cartao);
+    color:var(--ink);padding:0;max-width:520px;width:calc(100% - 32px)}
+  dialog::backdrop{background:rgba(0,0,0,.5)}
+  .dlg{padding:20px}
+  .dlg h3{margin:0 0 6px;font-size:16px}
+  label{display:block;font-size:12px;color:var(--ink2);margin:14px 0 5px}
+  input{width:100%;padding:9px 11px;font:inherit;font-size:14px;color:var(--ink);
+    background:var(--sup);border:1px solid var(--linha);border-radius:8px}
+  .linha-btn{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+  .obs{font-size:11.5px;color:var(--ink3);margin-top:6px;line-height:1.45}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="barra">
+  <span id="status"><span class="ponto"></span><span id="statusNome">conectando</span></span>
+  <span id="quando"></span>
+  <span class="cresce"></span>
+  <button id="btPausa">Pausar</button>
+  <button id="btConfig">Configuração</button>
+</div>
+
+<div class="hero" id="hero">
+  <div class="icone" id="heroIcone">…</div>
+  <div>
+    <div class="txt" id="heroTxt">carregando</div>
+    <div class="sub" id="heroSub"></div>
+  </div>
+</div>
+
+<div id="problemas"></div>
+
+<div class="andando" id="andando"></div>
+
+<div class="saude" id="saude"></div>
+
+<details id="detGrafico">
+  <summary>Execuções por minuto — última hora</summary>
+  <div class="corpo">
+    <div class="legenda">
+      <span><span class="amostra" style="background:var(--calmo)"></span>concluídas</span>
+      <span><span class="amostra" style="background:var(--ruim)"></span>com erro</span>
+    </div>
+    <div id="grafico"></div>
+    <div class="sub2">Pico sustentado aqui é a assinatura de um loop de auto-disparo.</div>
+  </div>
+</details>
+
+<details id="detCron">
+  <summary>Agendamentos: configurado × executou <span id="cronResumo" class="sub2"></span></summary>
+  <div class="corpo">
+    <div style="margin-bottom:10px">
+      <button id="btCron">Conferir agora</button>
+      <button id="btCopiarCron">Copiar relatório</button>
+    </div>
+    <div class="sub2" style="margin-bottom:10px">
+      Cada linha só é julgada onde existe execução retida como prova — a coluna “verificado” mostra
+      quanto foi. Ausência de dado nunca conta como falha.
+    </div>
+    <div class="rolar"><table id="tbCron"></table></div>
+  </div>
+</details>
+
+<details id="detFluxos">
+  <summary>Volume por fluxo — última hora</summary>
+  <div class="corpo"><div class="rolar"><table id="tbFluxos"></table></div></div>
+</details>
+
+</div>
+
+<dialog id="dlgConfig"><div class="dlg">
+  <h3>Configuração</h3>
+  <div class="obs">A chave fica no servidor local e nunca é enviada ao navegador.</div>
+  <label for="inBase">URL base do n8n</label>
+  <input type="text" id="inBase" placeholder="https://editor-atm.tbdc.com.br">
+  <label for="inChave">Chave da API (X-N8N-API-KEY)</label>
+  <input type="password" id="inChave" placeholder="deixe vazio para manter a atual" autocomplete="off">
+  <div class="obs" id="obsChave"></div>
+  <div class="obs" id="obsCaminho"></div>
+  <div class="linha-btn">
+    <button id="btTestar">Testar conexão</button>
+    <button id="btFechar">Fechar</button>
+    <button id="btSalvar">Salvar</button>
+  </div>
+  <div class="obs" id="obsTeste"></div>
+</div></dialog>
+
+<script>
+const $ = (s) => document.querySelector(s)
+let ultimo = null, ultimoCron = null, pausado = false
+
+const nf = (n) => new Intl.NumberFormat('pt-BR').format(n)
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+const hora = (iso) => iso ? new Date(iso).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '—'
+const horaS = (iso) => iso ? new Date(iso).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—'
+const dur = (min) => {
+  if (min == null) return '—'
+  const s = Math.max(0, Math.round(min*60)), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), r = s%60
+  return h ? `${h}h ${String(m).padStart(2,'0')}m` : m ? `${m}m ${String(r).padStart(2,'0')}s` : `${r}s`
+}
+
+// Classificação única, usada no status do topo e no veredito.
+//   verde = tudo ok · amarelo = atenção · vermelho = erro
+function pintarStatus(nivel, rotulo) {
+  $('#status').className = nivel
+  $('#statusNome').textContent = rotulo
+}
+
+// ---------- o veredito: o que o olho bate primeiro ----------
+function pintarHero(probs, t) {
+  const graves = probs.filter(p => p.nivel === 'ruim').length
+  const avisos = probs.filter(p => p.nivel === 'atencao').length
+  const h = $('#hero')
+  h.className = 'hero ' + (graves ? 'ruim' : avisos ? 'atencao' : 'ok')
+  pintarStatus(
+    graves ? 'ruim' : avisos ? 'atencao' : 'ok',
+    graves ? 'erro' : avisos ? 'atenção' : 'tudo ok'
+  )
+  if (!probs.length) {
+    $('#heroIcone').textContent = '✓'
+    $('#heroTxt').textContent = 'Tudo em ordem'
+    $('#heroSub').textContent = `nenhum erro, nada travado, ${nf(t.execucoesHora)} execuções na última hora`
+    return
+  }
+  const n = graves || avisos
+  $('#heroIcone').textContent = graves ? '✕' : '⚠'
+  $('#heroTxt').innerHTML = `<span class="n">${n}</span> &nbsp;${n === 1 ? 'coisa precisa' : 'coisas precisam'} de atenção`
+  $('#heroSub').textContent = probs.map(p => p.resumo).join(' · ')
+}
+
+// ---------- problemas viram cartões, não linhas de tabela ----------
+function juntarProblemas(d, cron) {
+  const P = []
+
+  for (const g of d.erros || []) {
+    P.push({
+      nivel: 'ruim', tipo: 'erro de execução',
+      resumo: `${g.fluxo}: ${g.total}× erro`,
+      titulo: g.fluxo,
+      grande: g.total > 1 ? `${nf(g.total)}×` : null,
+      det: [g.no ? `no nó <b>${esc(g.no)}</b>` : null,
+            g.total > 1 ? `entre ${hora(g.primeiro)} e ${hora(g.ultimo)}` : `às ${horaS(g.ultimo)}`
+           ].filter(Boolean).join(' · '),
+      mono: g.mensagem || null,
+      link: `${d.baseUrl}/workflow/${g.workflowId}/executions/${g.idExemplo}`,
+      copiarGrupo: (d.erros || []).indexOf(g),
+    })
+  }
+
+  for (const e of (d.rodando || []).filter(x => (x.minutos ?? 0) >= d.limiteTravadaMin)) {
+    P.push({
+      nivel: 'atencao', tipo: 'execução travada',
+      resumo: `${e.fluxo}: ${dur(e.minutos)} rodando`,
+      titulo: e.fluxo,
+      grande: dur(e.minutos),
+      det: `rodando desde ${horaS(e.inicio)}, sem terminar · limite de suspeita: ${d.limiteTravadaMin} min`,
+      link: `${d.baseUrl}/workflow/${e.workflowId}/executions/${e.id}`,
+      tempoDe: e.inicio,
+    })
+  }
+
+  for (const l of (cron?.linhas || []).filter(x => x.veredito === 'nunca-executou' || x.veredito === 'com-falhas')) {
+    P.push({
+      nivel: l.veredito === 'nunca-executou' ? 'ruim' : 'atencao',
+      tipo: l.veredito === 'nunca-executou' ? 'agendamento não executou' : 'agendamento com falhas',
+      resumo: `${l.fluxo}: ${l.totalPerdidas} ocorrência(s) perdida(s)`,
+      titulo: `${l.fluxo} — nó ${l.no}`,
+      grande: `${l.cumpridas}/${l.esperado}`,
+      det: `regra: ${esc(l.regra)} · verificado nas últimas ${l.janelaVerificadaHoras}h · ${l.totalPerdidas} perdida(s)`,
+      mono: l.perdidas?.length ? 'horários previstos sem execução: ' + l.perdidas.map(hora).join(', ') : null,
+      link: `${d.baseUrl}/workflow/${l.workflowId}`,
+    })
+  }
+
+  const ordem = { ruim: 0, atencao: 1 }
+  return P.sort((a,b) => ordem[a.nivel] - ordem[b.nivel])
+}
+
+function pintarProblemas(P) {
+  if (!P.length) { $('#problemas').innerHTML = ''; return }
+  $('#problemas').innerHTML = P.map(p => `
+    <div class="prob ${p.nivel}">
+      <div class="cab">
+        <span class="tipo">${esc(p.tipo)}</span>
+        ${p.grande ? `<span class="grande"${p.tempoDe ? ` data-tempo="${esc(p.tempoDe)}"` : ''}>${esc(p.grande)}</span>` : ''}
+        <div class="titulo">${esc(p.titulo)}</div>
+      </div>
+      <div class="det">${p.det}</div>
+      ${p.mono ? `<div class="mono">${esc(p.mono)}</div>` : ''}
+      <div class="acoes">
+        ${p.copiarGrupo != null ? `<button data-grupo="${p.copiarGrupo}">Copiar diagnóstico</button>` : ''}
+        <a href="${esc(p.link)}" target="_blank">abrir no n8n →</a>
+      </div>
+    </div>`).join('')
+}
+
+function pintarAndando(lista, lim) {
+  const ativas = (lista || []).filter(e => (e.minutos ?? 0) < lim)
+  if (!ativas.length) { $('#andando').innerHTML = ''; return }
+  $('#andando').innerHTML = ativas.sort((a,b)=>(b.minutos??0)-(a.minutos??0)).map(e =>
+    `<span class="chip"><span class="girando"></span>
+      <span class="t" data-tempo="${esc(e.inicio||'')}">${dur(e.minutos)}</span>
+      <span class="nm" title="${esc(e.fluxo)}">${esc(e.fluxo)}</span></span>`).join('')
+}
+
+function pintarSaude(d, cron) {
+  const emDia = (cron?.linhas || []).filter(l => l.veredito === 'ok').length
+  const semDados = (cron?.linhas || []).filter(l => l.veredito === 'sem-dados').length
+  // Conta a partir dos MESMOS grupos que geram os cartões. Usar a janela de 1h
+  // aqui fazia a linha dizer "0 erros" com um cartão de erro na tela logo acima.
+  const totalErros = (d.erros || []).reduce((n, g) => n + g.total, 0)
+  const partes = [
+    `<span class="item">${totalErros === 0 ? '✓' : '✕'} <b>${nf(totalErros)}</b> ${totalErros === 1 ? 'erro recente' : 'erros recentes'}</span>`,
+    `<span class="item">◷ <b>${d.tiles.truncado ? '≥' : ''}${nf(d.tiles.execucoesHora)}</b> execuções (${d.tiles.porMinuto.toFixed(1)}/min)</span>`,
+    `<span class="item">▶ <b>${nf(d.tiles.rodando)}</b> em andamento</span>`,
+  ]
+  if (cron) {
+    partes.push(`<span class="item">⏱ <b>${emDia}</b> agendamentos em dia</span>`)
+    if (semDados) partes.push(`<span class="item" title="a retenção do banco não guarda execução suficiente para conferir">? <b>${semDados}</b> não verificáveis</span>`)
+  }
+  $('#saude').innerHTML = partes.join('')
+}
+
+function grafico(serie) {
+  const L=30,B=20,T=8,R=6,A=120,W=Math.max(300, serie.length*11)
+  const max = Math.max(1, ...serie.map(d => d.ok + d.erro))
+  const bw=(W-L-R)/serie.length, larg=Math.max(3,bw-3)
+  const y=(v)=>T+(A-T-B)*(1-v/max)
+  let g=''
+  for (const v of [...new Set([0, Math.ceil(max/2), max])]) {
+    g += `<line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>`
+    g += `<text x="${L-6}" y="${y(v)+3.5}" text-anchor="end" font-size="9.5" fill="var(--ink3)">${v}</text>`
+  }
+  serie.forEach((d,i)=>{
+    const x=L+i*bw+(bw-larg)/2, tot=d.ok+d.erro
+    if(!tot) return
+    const hOk=(A-T-B)*d.ok/max, hEr=(A-T-B)*d.erro/max, base=A-B
+    const dica=`${hora(d.minuto)} — ${d.ok} concluída(s)${d.erro?`, ${d.erro} com erro`:''}`
+    if(d.erro) g+=`<rect x="${x}" y="${base-hEr-(d.ok?hOk+2:0)}" width="${larg}" height="${Math.max(2,hEr)}" rx="3" fill="var(--ruim)"><title>${dica}</title></rect>`
+    if(d.ok)  g+=`<rect x="${x}" y="${base-hOk}" width="${larg}" height="${Math.max(2,hOk)}" rx="3" fill="var(--calmo)"><title>${dica}</title></rect>`
+  })
+  g+=`<text x="${L}" y="${A-5}" font-size="9.5" fill="var(--ink3)">${hora(serie[0].minuto)}</text>`
+  g+=`<text x="${W-R}" y="${A-5}" text-anchor="end" font-size="9.5" fill="var(--ink3)">agora</text>`
+  $('#grafico').innerHTML=`<div class="rolar"><svg viewBox="0 0 ${W} ${A}" width="${W}" height="${A}" role="img" aria-label="execuções por minuto na última hora">${g}</svg></div>`
+}
+
+function tabelaFluxos(lista) {
+  if (!lista?.length) { $('#tbFluxos').innerHTML = '<tbody><tr><td class="nada">Sem execuções na última hora.</td></tr></tbody>'; return }
+  $('#tbFluxos').innerHTML = '<thead><tr><th>Fluxo</th><th>Execuções</th><th>Erros</th></tr></thead><tbody>' +
+    lista.map(f=>`<tr><td>${esc(f.fluxo)}</td><td class="n">${nf(f.total)}</td>
+      <td class="n">${f.erros?`<span class="tag ruim">${nf(f.erros)}</span>`:'0'}</td></tr>`).join('')+'</tbody>'
+}
+
+const VER = {
+  'nunca-executou':['ruim','✕ não executou'], 'com-falhas':['atencao','⚠ perdeu ocorrências'],
+  'sem-dados':['','? sem execução retida'], 'nao-comparavel':['','— não comparável'],
+  'ok':['','✓ em dia'], 'sem-janela':['','— sem ocorrência'], 'inativo':['','○ inativo'],
+}
+function tabelaCron(d) {
+  if (!d.linhas?.length) { $('#tbCron').innerHTML='<tbody><tr><td class="nada">Nenhum Schedule Trigger encontrado.</td></tr></tbody>'; return }
+  $('#tbCron').innerHTML='<thead><tr><th>Fluxo / nó</th><th>Regra</th><th>Verif.</th><th>Prev.</th><th>Cumpr.</th><th>Atraso</th><th>Situação</th></tr></thead><tbody>'+
+    d.linhas.map(l=>{
+      const [c,r]=VER[l.veredito]||['',l.veredito]
+      return `<tr><td>${esc(l.fluxo)}<div class="sub2">nó: ${esc(l.no)} · ${esc(l.fuso)}</div>${l.detalhe?`<div class="sub2">${esc(l.detalhe)}</div>`:''}</td>
+        <td class="sub2">${esc(l.regra)}</td>
+        <td class="n">${l.janelaVerificadaHoras==null?'—':l.janelaVerificadaHoras+'h'}</td>
+        <td class="n">${l.esperado??'—'}</td>
+        <td class="n">${l.cumpridas??'—'}${l.totalPerdidas?` <span class="tag ruim">−${l.totalPerdidas}</span>`:''}</td>
+        <td class="n">${l.atrasoMedioSeg==null?'—':l.atrasoMedioSeg+'s'}</td>
+        <td><span class="tag ${c}">${r}</span></td></tr>`
+    }).join('')+'</tbody>'
+}
+
+// cronômetros vivos, tanto nos chips quanto nos cartões
+setInterval(()=>{
+  document.querySelectorAll('[data-tempo]').forEach(el=>{
+    const i=el.dataset.tempo; if(!i) return
+    el.textContent = dur((Date.now()-new Date(i).getTime())/60000)
+  })
+},1000)
+
+async function puxar() {
+  if (pausado) return
+  try {
+    const d = await (await fetch('/api/state',{cache:'no-store'})).json()
+    if (!d.ok) {
+      const casos = {
+        'erro-api':  ['ruim',     'n8n offline',      'Instância do n8n offline',
+                      'o painel está no ar, mas não consegue falar com o n8n'],
+        'sem-chave': ['ruim',     'não configurado',  'Falta configurar a chave',
+                      'abra Configuração e informe a chave da API'],
+        'pausado':   ['pausado',  'pausado',          'Coleta pausada', 'clique em Retomar'],
+      }
+      const [nivel, rot, titulo, sub] = casos[d.motivo] || ['ruim', 'sem dados', 'Sem dados do n8n', '']
+      $('#hero').className = 'hero ' + (nivel === 'pausado' ? '' : nivel)
+      $('#heroIcone').textContent = nivel === 'pausado' ? '⏸' : '✕'
+      $('#heroTxt').textContent = titulo
+      $('#heroSub').textContent = d.detalhe ? `${sub} — ${d.detalhe}` : sub
+      pintarStatus(nivel, rot)
+      $('#problemas').innerHTML=''; $('#andando').innerHTML=''; $('#saude').innerHTML=''
+      return
+    }
+    ultimo = d
+    $('#quando').textContent = 'atualizado às ' + horaS(d.momento)
+    const P = juntarProblemas(d, ultimoCron)
+    pintarHero(P, d.tiles)
+    pintarProblemas(P)
+    pintarAndando(d.rodando, d.limiteTravadaMin)
+    pintarSaude(d, ultimoCron)
+    grafico(d.serie)
+    tabelaFluxos(d.porFluxo)
+  } catch {
+    $('#quando').textContent = ''
+    pintarStatus('ruim', 'painel offline')
+  }
+}
+
+async function puxarCron(recarregar) {
+  $('#cronResumo').textContent = '· conferindo…'
+  try {
+    const d = await (await fetch('/api/cron'+(recarregar?'?recarregar=1':''))).json()
+    if (!d.ok) { $('#cronResumo').textContent = '· indisponível'; return }
+    ultimoCron = d
+    tabelaCron(d)
+    const ruins = d.linhas.filter(l=>l.veredito==='nunca-executou'||l.veredito==='com-falhas').length
+    $('#cronResumo').textContent = ruins ? `· ${ruins} com problema` : '· todos em dia'
+    if (ultimo) { const P=juntarProblemas(ultimo,d); pintarHero(P,ultimo.tiles); pintarProblemas(P); pintarSaude(ultimo,d) }
+  } catch { $('#cronResumo').textContent = '· falhou' }
+}
+
+async function copiar(t, b) {
+  try { await navigator.clipboard.writeText(t) }
+  catch { const x=document.createElement('textarea'); x.value=t; document.body.appendChild(x); x.select(); document.execCommand('copy'); x.remove() }
+  if (b) { const a=b.textContent; b.textContent='Copiado ✓'; setTimeout(()=>b.textContent=a,1600) }
+}
+
+async function dumpDoGrupo(g) {
+  const d = await (await fetch('/api/execucao?id='+encodeURIComponent(g.idExemplo))).json()
+  const cab = g.total>1
+    ? `> Este erro ocorreu **${g.total} vezes** na última hora (de ${hora(g.primeiro)} a ${hora(g.ultimo)}).\n`
+      + `> Execuções afetadas: ${g.ids.map(i=>'#'+i).join(', ')}${g.total>g.ids.length?' …':''}\n`
+      + `> Abaixo, o diagnóstico completo de uma delas (#${g.idExemplo}).\n`
+    : ''
+  return cab + (d.ok ? d.diagnostico : `## Execução ${g.idExemplo}\nfalha ao obter: ${d.erro||''}`)
+}
+
+document.addEventListener('click', async ev=>{
+  const b = ev.target.closest('[data-grupo]')
+  if(!b) return
+  const g = ultimo?.erros?.[Number(b.dataset.grupo)]
+  if(!g) return
+  b.textContent='…'
+  await copiar(await dumpDoGrupo(g), b)
+})
+
+$('#btPausa').onclick = ev=>{
+  pausado=!pausado
+  ev.target.textContent = pausado?'Retomar':'Pausar'
+  if(pausado) pintarStatus('pausado','pausado'); else puxar()
+}
+$('#btCron').onclick = ()=>puxarCron(true)
+$('#btCopiarCron').onclick = async ev=>{
+  if(!ultimoCron) await puxarCron(false)
+  if(!ultimoCron) return
+  const L=[`# Agendamentos: configurado × executou`,'',
+    `Janela: até ${ultimoCron.janelaHoras}h · tolerância: ${ultimoCron.toleranciaMin} min · fuso padrão: ${ultimoCron.fusoPadrao}`,'']
+  for(const l of ultimoCron.linhas){
+    L.push(`## ${l.fluxo} — nó \`${l.no}\``)
+    L.push(`- regra: ${l.regra} (fuso ${l.fuso})`)
+    L.push(`- ativo: ${l.ativo?'sim':'NÃO'}${l.desativado?' · nó desativado':''}`)
+    L.push(`- situação: **${l.veredito}**${l.detalhe?` — ${l.detalhe}`:''}`)
+    if(l.esperado!=null) L.push(`- verificado em ${l.janelaVerificadaHoras}h · previstas ${l.esperado} · cumpridas ${l.cumpridas} · perdidas ${l.totalPerdidas}`)
+    if(l.atrasoMedioSeg!=null) L.push(`- atraso médio: ${l.atrasoMedioSeg}s`)
+    if(l.totalPerdidas) L.push(`- horários perdidos: ${l.perdidas.join(', ')}`)
+    L.push(`- última execução: ${l.ultimaExec??'nenhuma'}`); L.push('')
+  }
+  await copiar(L.join('\n'), ev.target)
+}
+
+$('#btConfig').onclick = async ()=>{
+  const d = await (await fetch('/api/config')).json()
+  $('#inBase').value=d.baseUrl||''; $('#inChave').value=''
+  $('#obsChave').textContent = d.temChave?'Já existe uma chave salva. Deixe vazio para mantê-la.':'Nenhuma chave salva ainda.'
+  $('#obsCaminho').textContent = 'Guardada em: '+d.caminhoConfig
+  $('#obsTeste').textContent=''
+  $('#dlgConfig').showModal()
+}
+$('#btFechar').onclick = ()=>$('#dlgConfig').close()
+$('#btSalvar').onclick = async ()=>{
+  await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({baseUrl:$('#inBase').value, apiKey:$('#inChave').value, ativo:true})})
+  $('#inChave').value=''; $('#dlgConfig').close(); puxar()
+}
+$('#btTestar').onclick = async ()=>{
+  $('#obsTeste').textContent='testando…'
+  await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({baseUrl:$('#inBase').value, apiKey:$('#inChave').value})})
+  $('#inChave').value=''
+  const d = await (await fetch('/api/teste',{method:'POST'})).json()
+  $('#obsTeste').textContent = d.ok?'Conexão OK ✓':'Falhou: '+(d.erro||'')
+}
+
+puxar(); setInterval(puxar, 10000)
+puxarCron(false); setInterval(()=>puxarCron(false), 300000)
+</script>
+</body>
+</html>
