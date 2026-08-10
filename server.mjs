@@ -10,7 +10,7 @@
 import { createServer } from 'node:http'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
-import { join, dirname } from 'node:path'
+import { join, dirname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gatilhosDe, regraParaCron, descreverRegra, esperadas, comparar } from './cron.mjs'
 
@@ -111,6 +111,46 @@ async function nomeDeFluxo(id) {
 
 const LIMITE_TRAVADA_MIN = 30
 const JANELA_MS = 3600000
+
+// ------------------------------------------------- lista recente em cache
+//
+// Busca e agregacao rodam sobre esta lista, nao sobre a API. Sem isso, cada
+// tecla digitada na busca dispararia paginacao remota. O cache e curto de
+// proposito: 30s deixa a tela viva sem transformar o painel em carga.
+let cacheLista = { em: 0, itens: [], truncado: false, paginas: 0 }
+
+// `paginas` cresce conforme a janela pedida: 10 paginas cobrem menos de 2 horas
+// numa instancia com ~1.400 execucoes/hora, entao um pedido de 24h precisa ler
+// muito mais. O cache guarda com quantas paginas foi montado e refaz a leitura
+// quando alguem pede mais fundo do que ele tem.
+async function listarRecentes(paginas = 10) {
+  const valido = Date.now() - cacheLista.em < 30000 && cacheLista.itens.length
+  if (valido && cacheLista.paginas >= paginas) return cacheLista
+  const { itens, truncado } = await paginarExecucoes('', { paginas })
+  await nomesDeFluxos()
+  const enriquecidos = itens.map((e) => ({
+    id: e.id,
+    workflowId: e.workflowId,
+    fluxo: cacheNomes.get(e.workflowId) || e.workflowId,
+    status: e.status,
+    modo: e.mode,
+    inicio: e.startedAt,
+    fim: e.stoppedAt,
+    duracaoMs: e.startedAt && e.stoppedAt
+      ? new Date(e.stoppedAt).getTime() - new Date(e.startedAt).getTime()
+      : null,
+  }))
+  cacheLista = { em: Date.now(), itens: enriquecidos, truncado, paginas }
+  return cacheLista
+}
+
+const ehErro = (s) => s === 'error' || s === 'crashed'
+
+function percentil(valores, p) {
+  if (!valores.length) return null
+  const v = valores.slice().sort((a, b) => a - b)
+  return v[Math.min(v.length - 1, Math.floor((p / 100) * v.length))]
+}
 
 // A API limita a 250 por pagina. Sem paginar, o painel reporta 250 como se fosse
 // o total da hora - mentindo para baixo justamente quando o volume explode, que e
@@ -536,6 +576,126 @@ const servidor = createServer(async (req, res) => {
       }
     }
 
+    // ---------------------------------------------------------- logs
+    if (url.pathname === '/api/logs') {
+      if (!config.apiKey) return json(res, 200, { ok: false, motivo: 'sem-chave' })
+      const { itens, truncado } = await listarRecentes()
+
+      const q = (url.searchParams.get('q') || '').trim().toLowerCase()
+      const status = (url.searchParams.get('status') || '').split(',').filter(Boolean)
+      const modo = (url.searchParams.get('modo') || '').split(',').filter(Boolean)
+      const horas = Number(url.searchParams.get('horas') || 0)
+      const pagina = Math.max(0, Number(url.searchParams.get('pagina') || 0))
+      const porPagina = Math.min(500, Math.max(10, Number(url.searchParams.get('limite') || 100)))
+      const corte = horas ? Date.now() - horas * 3600000 : null
+
+      const filtrados = itens.filter((e) => {
+        if (status.length && !status.includes(e.status)) return false
+        if (modo.length && !modo.includes(e.modo)) return false
+        if (corte && (!e.inicio || new Date(e.inicio).getTime() < corte)) return false
+        if (!q) return true
+        // busca por nome do fluxo ou por id da execucao
+        return e.fluxo.toLowerCase().includes(q) || String(e.id).includes(q)
+      })
+
+      // facetas calculadas sobre o conjunto JA filtrado por busca/tempo, para os
+      // contadores dos botoes baterem com o que o clique vai produzir
+      const porStatus = {}, porModo = {}
+      for (const e of filtrados) {
+        porStatus[e.status] = (porStatus[e.status] || 0) + 1
+        porModo[e.modo] = (porModo[e.modo] || 0) + 1
+      }
+
+      return json(res, 200, {
+        ok: true,
+        total: filtrados.length,
+        universo: itens.length,
+        truncado,
+        pagina,
+        porPagina,
+        porStatus,
+        porModo,
+        baseUrl: config.baseUrl,
+        itens: filtrados.slice(pagina * porPagina, (pagina + 1) * porPagina),
+      })
+    }
+
+    // ---------------------------------------------------------- dashboard
+    if (url.pathname === '/api/dashboard') {
+      if (!config.apiKey) return json(res, 200, { ok: false, motivo: 'sem-chave' })
+      const horas = Math.min(168, Math.max(1, Number(url.searchParams.get('horas') || 24)))
+      // 250 execuções por página; quanto maior a janela, mais fundo é preciso ler
+      const paginas = horas <= 2 ? 10 : horas <= 12 ? 30 : 60
+      const { itens, truncado } = await listarRecentes(paginas)
+
+      const agora = Date.now()
+      const corte = agora - horas * 3600000
+      const janela = itens.filter((e) => e.inicio && new Date(e.inicio).getTime() >= corte)
+
+      // baldes por hora (ou por minuto quando a janela e curta)
+      const passoMin = horas <= 2 ? 1 : horas <= 12 ? 10 : 60
+      const passoMs = passoMin * 60000
+      const baldes = new Map()
+      for (let t = Math.floor(corte / passoMs) * passoMs; t <= agora; t += passoMs) {
+        baldes.set(t, { t: new Date(t).toISOString(), ok: 0, erro: 0 })
+      }
+      for (const e of janela) {
+        const t = Math.floor(new Date(e.inicio).getTime() / passoMs) * passoMs
+        const b = baldes.get(t)
+        if (b) b[ehErro(e.status) ? 'erro' : 'ok']++
+      }
+
+      const porFluxo = new Map()
+      for (const e of janela) {
+        const v = porFluxo.get(e.workflowId) || {
+          workflowId: e.workflowId, fluxo: e.fluxo, total: 0, erros: 0, duracoes: [],
+        }
+        v.total++
+        if (ehErro(e.status)) v.erros++
+        if (e.duracaoMs != null) v.duracoes.push(e.duracaoMs)
+        porFluxo.set(e.workflowId, v)
+      }
+      const fluxos = [...porFluxo.values()].map((f) => ({
+        workflowId: f.workflowId, fluxo: f.fluxo, total: f.total, erros: f.erros,
+        taxaErro: f.total ? f.erros / f.total : 0,
+        medianaMs: percentil(f.duracoes, 50),
+        p95Ms: percentil(f.duracoes, 95),
+      }))
+
+      const porStatus = {}, porModo = {}
+      for (const e of janela) {
+        porStatus[e.status] = (porStatus[e.status] || 0) + 1
+        porModo[e.modo] = (porModo[e.modo] || 0) + 1
+      }
+      const duracoes = janela.map((e) => e.duracaoMs).filter((d) => d != null)
+      const erros = janela.filter((e) => ehErro(e.status)).length
+
+      const maisAntiga = janela.length ? janela[janela.length - 1].inicio : null
+
+      return json(res, 200, {
+        ok: true,
+        horas, passoMin, truncado,
+        // quanto do periodo pedido a retencao realmente cobre
+        coberturaHoras: maisAntiga
+          ? Number(((agora - new Date(maisAntiga).getTime()) / 3600000).toFixed(1))
+          : 0,
+        kpis: {
+          total: janela.length,
+          erros,
+          taxaErro: janela.length ? erros / janela.length : 0,
+          fluxosAtivos: porFluxo.size,
+          medianaMs: percentil(duracoes, 50),
+          p95Ms: percentil(duracoes, 95),
+        },
+        serie: [...baldes.values()],
+        porStatus, porModo,
+        volume: fluxos.slice().sort((a, b) => b.total - a.total).slice(0, 12),
+        falhas: fluxos.filter((f) => f.erros).sort((a, b) => b.erros - a.erros).slice(0, 12),
+        lentos: fluxos.filter((f) => f.p95Ms != null).sort((a, b) => b.p95Ms - a.p95Ms).slice(0, 12),
+        baseUrl: config.baseUrl,
+      })
+    }
+
     if (url.pathname === '/api/cron') {
       if (!config.apiKey) return json(res, 200, { ok: false, motivo: 'sem-chave' })
       try {
@@ -562,13 +722,33 @@ const servidor = createServer(async (req, res) => {
       }
     }
 
-    if (url.pathname === '/' || url.pathname === '/index.html') {
-      const html = await readFile(join(AQUI, 'public', 'index.html'))
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
-      return res.end(html)
+    // ---------------------------------------------------------- estaticos
+    const PAGINAS = { '/': 'index.html', '/dashboard': 'dashboard.html', '/logs': 'logs.html' }
+    const TIPOS = {
+      '.html': 'text/html; charset=utf-8',
+      '.css': 'text/css; charset=utf-8',
+      '.js': 'text/javascript; charset=utf-8',
+      '.svg': 'image/svg+xml',
     }
 
-    res.writeHead(404, { 'content-type': 'text/plain' })
+    const alvo = PAGINAS[url.pathname] || url.pathname.replace(/^\/+/, '')
+    const RAIZ = join(AQUI, 'public')
+    const caminho = resolve(RAIZ, alvo)
+
+    // impede subir de diretorio via ../ no caminho pedido
+    if (caminho.startsWith(RAIZ + sep) || caminho === RAIZ) {
+      try {
+        const conteudo = await readFile(caminho)
+        const ext = caminho.slice(caminho.lastIndexOf('.'))
+        res.writeHead(200, {
+          'content-type': TIPOS[ext] || 'application/octet-stream',
+          'cache-control': 'no-store',
+        })
+        return res.end(conteudo)
+      } catch { /* cai no 404 */ }
+    }
+
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
     res.end('nao encontrado')
   } catch (e) {
     json(res, 500, { ok: false, erro: String(e.message || e) })

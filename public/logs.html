@@ -1,0 +1,223 @@
+<!doctype html>
+<!-- Desenvolvido por Luiz Fernando Riva Nekel -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logs — Monitor n8n</title>
+<link rel="stylesheet" href="/base.css">
+<style>
+  body{overflow:hidden}
+  .app{height:100vh;max-width:1720px;margin:0 auto;padding:12px;
+    display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:10px}
+  .topo{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .filtros{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    background:var(--cartao);border:1px solid var(--linha);border-radius:12px;padding:9px 12px}
+  .busca{flex:1;min-width:220px;position:relative;display:flex;align-items:center}
+  .busca input{width:100%;padding-left:30px}
+  .busca .lupa{position:absolute;left:10px;color:var(--ink3);font-size:13px;pointer-events:none}
+  .busca kbd{position:absolute;right:9px;font:11px ui-monospace,monospace;color:var(--ink3);
+    border:1px solid var(--linha);border-radius:4px;padding:0 4px}
+  .grupo{display:flex;gap:4px;align-items:center}
+  .grupo .rot{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink3);margin-right:2px}
+  .chip{font-size:12px;padding:4px 9px;border-radius:7px;border:1px solid var(--linha);
+    color:var(--ink2);background:transparent;cursor:pointer;white-space:nowrap}
+  .chip:hover{color:var(--ink)}
+  .chip.on{background:var(--cartao);color:var(--ink);border-color:var(--ink3)}
+  .chip .c{color:var(--ink3);font-variant-numeric:tabular-nums;margin-left:4px}
+  .chip.on .c{color:var(--ink2)}
+  .chip.erro.on{border-color:color-mix(in oklab,var(--ruim) 55%,transparent);color:var(--ruim)}
+  .st{display:inline-flex;align-items:center;gap:5px}
+  .pt{width:7px;height:7px;border-radius:50%;flex:none}
+  .tbwrap{overflow:auto;min-height:0}
+  .rodape{display:flex;align-items:center;gap:10px;padding:9px 4px 0;font-size:12px;color:var(--ink3)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topo">
+    <nav class="nav">
+      <a href="/">Monitor</a>
+      <a href="/dashboard">Dashboard</a>
+      <a href="/logs" class="atual">Logs</a>
+    </nav>
+    <span id="status"><span class="ponto"></span><span id="statusNome">carregando</span></span>
+    <span class="cresce"></span>
+    <span class="meta" id="resumo"></span>
+    <button id="btCopiar">Copiar lista</button>
+    <button id="btAtualizar">Atualizar</button>
+  </div>
+
+  <div class="filtros">
+    <label class="busca">
+      <span class="lupa">⌕</span>
+      <input id="q" type="search" placeholder="buscar por nome do fluxo ou número da execução…" autocomplete="off">
+      <kbd>/</kbd>
+    </label>
+    <div class="grupo" id="fStatus"><span class="rot">status</span></div>
+    <div class="grupo" id="fModo"><span class="rot">modo</span></div>
+    <div class="grupo"><span class="rot">período</span>
+      <select id="fHoras">
+        <option value="1">1h</option>
+        <option value="6">6h</option>
+        <option value="24" selected>24h</option>
+        <option value="0">tudo que há</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="painel">
+    <div class="tbwrap"><table id="tb"></table></div>
+    <div class="rodape">
+      <span id="conta"></span>
+      <span class="cresce"></span>
+      <button id="btMais" hidden>Carregar mais</button>
+    </div>
+  </div>
+</div>
+
+<dialog id="dlg"><div class="dlg">
+  <h3 id="dlgTitulo"></h3>
+  <div class="obs" id="dlgSub"></div>
+  <div style="margin:12px 0;display:flex;gap:8px">
+    <button id="btCopiarDiag">Copiar diagnóstico</button>
+    <a id="dlgLink" href="#" target="_blank"><button>Abrir no n8n →</button></a>
+    <span class="cresce"></span>
+    <button id="btFechar">Fechar</button>
+  </div>
+  <div class="mono" id="dlgCorpo">carregando…</div>
+</div></dialog>
+
+<script>
+const $ = s => document.querySelector(s)
+const nf = n => new Intl.NumberFormat('pt-BR').format(n)
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+const dh = i => i ? new Date(i).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—'
+const dms = ms => {
+  if (ms == null) return '—'
+  if (ms < 1000) return ms + 'ms'
+  const s = ms/1000
+  if (s < 60) return s.toFixed(1) + 's'
+  const m = Math.floor(s/60)
+  return m < 60 ? `${m}m ${Math.round(s%60)}s` : `${Math.floor(m/60)}h ${m%60}m`
+}
+
+const COR = {success:'var(--pontoBom)', error:'var(--pontoRuim)', crashed:'var(--pontoRuim)',
+  running:'var(--calmo)', waiting:'var(--pontoAtencao)', new:'var(--ink3)', canceled:'var(--ink3)', unknown:'var(--ink3)'}
+
+const estado = { q:'', status:new Set(), modo:new Set(), horas:24, pagina:0, itens:[], base:'' }
+let ultimoDiag = ''
+
+function pintarStatus(n, r){ $('#status').className = n; $('#statusNome').textContent = r }
+
+function chips(alvo, contas, sel, aoClicar, classe){
+  const el = $(alvo)
+  el.querySelectorAll('.chip').forEach(c => c.remove())
+  const chaves = Object.keys(contas).sort((a,b)=>contas[b]-contas[a])
+  if (!chaves.length) return
+  for (const k of chaves){
+    const b = document.createElement('button')
+    b.className = 'chip' + (sel.has(k)?' on':'') + (classe && (k==='error'||k==='crashed') ? ' erro':'')
+    b.innerHTML = `${esc(k)}<span class="c">${nf(contas[k])}</span>`
+    b.onclick = () => { sel.has(k) ? sel.delete(k) : sel.add(k); estado.pagina=0; aoClicar() }
+    el.appendChild(b)
+  }
+}
+
+function linha(e){
+  return `<tr class="clic" data-id="${esc(e.id)}" data-wf="${esc(e.workflowId)}" data-fluxo="${esc(e.fluxo)}">
+    <td class="n"><a href="${esc(estado.base)}/workflow/${esc(e.workflowId)}/executions/${esc(e.id)}"
+       target="_blank" onclick="event.stopPropagation()">#${esc(e.id)}</a></td>
+    <td>${esc(e.fluxo)}</td>
+    <td><span class="st"><span class="pt" style="background:${COR[e.status]||'var(--ink3)'}"></span>${esc(e.status)}</span></td>
+    <td>${esc(e.modo||'')}</td>
+    <td class="n">${dh(e.inicio)}</td>
+    <td class="n">${dms(e.duracaoMs)}</td></tr>`
+}
+
+async function buscar(acumular){
+  const p = new URLSearchParams({
+    q: estado.q, horas: String(estado.horas),
+    pagina: String(estado.pagina), limite: '100',
+  })
+  if (estado.status.size) p.set('status', [...estado.status].join(','))
+  if (estado.modo.size) p.set('modo', [...estado.modo].join(','))
+  try{
+    const d = await (await fetch('/api/logs?'+p, {cache:'no-store'})).json()
+    if (!d.ok){
+      pintarStatus('ruim', d.motivo==='sem-chave' ? 'não configurado' : 'sem dados')
+      $('#tb').innerHTML = `<tbody><tr><td class="vazio">Sem dados do n8n.</td></tr></tbody>`
+      return
+    }
+    pintarStatus('ok','conectado')
+    estado.base = d.baseUrl
+    estado.itens = acumular ? estado.itens.concat(d.itens) : d.itens
+    chips('#fStatus', d.porStatus, estado.status, aplicar, true)
+    chips('#fModo', d.porModo, estado.modo, aplicar, false)
+
+    $('#tb').innerHTML = estado.itens.length
+      ? '<thead><tr><th>Execução</th><th>Fluxo</th><th>Status</th><th>Modo</th><th>Início</th><th>Duração</th></tr></thead><tbody>'
+        + estado.itens.map(linha).join('') + '</tbody>'
+      : `<tbody><tr><td class="vazio">Nada encontrado com esses filtros.</td></tr></tbody>`
+
+    $('#conta').textContent = `${nf(estado.itens.length)} de ${nf(d.total)} execuções`
+    $('#resumo').textContent = `${nf(d.universo)} em memória${d.truncado?' (há mais no servidor)':''}`
+    $('#btMais').hidden = estado.itens.length >= d.total
+  } catch {
+    pintarStatus('ruim','painel offline')
+  }
+}
+
+function aplicar(){ estado.pagina = 0; buscar(false) }
+
+let deb
+$('#q').addEventListener('input', ev => {
+  clearTimeout(deb)
+  deb = setTimeout(() => { estado.q = ev.target.value.trim(); aplicar() }, 180)
+})
+$('#fHoras').onchange = ev => { estado.horas = Number(ev.target.value); aplicar() }
+$('#btMais').onclick = () => { estado.pagina++; buscar(true) }
+$('#btAtualizar').onclick = () => aplicar()
+
+$('#btCopiar').onclick = async ev => {
+  const L = ['# Execuções n8n', '',
+    `filtro: ${estado.q||'(sem busca)'} · status: ${[...estado.status].join(',')||'todos'} · modo: ${[...estado.modo].join(',')||'todos'} · período: ${estado.horas?estado.horas+'h':'tudo'}`,
+    '', '| execução | fluxo | status | modo | início | duração |', '|---|---|---|---|---|---|']
+  for (const e of estado.itens) L.push(`| #${e.id} | ${e.fluxo} | ${e.status} | ${e.modo} | ${dh(e.inicio)} | ${dms(e.duracaoMs)} |`)
+  await copiar(L.join('\n'), ev.target)
+}
+
+async function copiar(t,b){
+  try{ await navigator.clipboard.writeText(t) }
+  catch{ const x=document.createElement('textarea'); x.value=t; document.body.appendChild(x); x.select(); document.execCommand('copy'); x.remove() }
+  if(b){ const a=b.textContent; b.textContent='Copiado ✓'; setTimeout(()=>b.textContent=a,1500) }
+}
+
+// clique na linha abre o diagnóstico
+$('#tb').addEventListener('click', async ev => {
+  const tr = ev.target.closest('tr.clic'); if(!tr) return
+  const id = tr.dataset.id
+  $('#dlgTitulo').textContent = `Execução #${id}`
+  $('#dlgSub').textContent = tr.dataset.fluxo
+  $('#dlgLink').href = `${estado.base}/workflow/${tr.dataset.wf}/executions/${id}`
+  $('#dlgCorpo').textContent = 'carregando…'
+  ultimoDiag = ''
+  $('#dlg').showModal()
+  const d = await (await fetch('/api/execucao?id='+encodeURIComponent(id))).json()
+  ultimoDiag = d.ok ? d.diagnostico : ('não foi possível montar o diagnóstico: ' + (d.erro||''))
+  $('#dlgCorpo').textContent = ultimoDiag
+})
+$('#btFechar').onclick = () => $('#dlg').close()
+$('#btCopiarDiag').onclick = ev => copiar(ultimoDiag, ev.target)
+
+addEventListener('keydown', ev => {
+  if (ev.key === '/' && document.activeElement !== $('#q')){ ev.preventDefault(); $('#q').focus() }
+  if (ev.key === 'Escape' && document.activeElement === $('#q')){ $('#q').value=''; estado.q=''; aplicar() }
+})
+
+buscar(false)
+setInterval(() => { if (!$('#dlg').open) buscar(false) }, 30000)
+</script>
+</body>
+</html>

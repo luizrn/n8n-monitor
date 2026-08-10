@@ -1,0 +1,115 @@
+/* Tokens e componentes compartilhados pelas três páginas.
+   Desenvolvido por Luiz Fernando Riva Nekel */
+
+:root{
+  --sup:#fbfbfc; --cartao:#ffffff; --linha:#e4e7ea;
+  --ink:#101316; --ink2:#4d545b; --ink3:#828b93;
+  --calmo:#2f6fd0; --bom:#2c7a52; --atencao:#a06507; --ruim:#c0392b;
+  --pontoBom:#28a862; --pontoAtencao:#f2c014; --pontoRuim:#e0402c;
+  --grid:#eaedf0;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --sup:#0e1114; --cartao:#171b1f; --linha:#282e34;
+    --ink:#eef0f2; --ink2:#a9b1b9; --ink3:#79828b;
+    --calmo:#6fa8f5; --bom:#5cbd8a; --atencao:#e8bc4e; --ruim:#f0745c;
+    --pontoBom:#43c98a; --pontoAtencao:#f5cf3d; --pontoRuim:#f4614a;
+    --grid:#232930;
+  }
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--sup);color:var(--ink);
+  font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased}
+
+a{color:var(--calmo);text-decoration:none}
+a:hover{text-decoration:underline}
+
+button,select,input{font:inherit}
+button{font-size:12.5px;color:var(--ink2);background:transparent;
+  border:1px solid var(--linha);border-radius:7px;padding:5px 10px;cursor:pointer;flex:none}
+button:hover{color:var(--ink);border-color:var(--ink3)}
+button.on{color:var(--ink);border-color:var(--ink3);background:var(--cartao)}
+input,select{font-size:13px;color:var(--ink);background:var(--cartao);
+  border:1px solid var(--linha);border-radius:8px;padding:6px 10px}
+input:focus,select:focus{outline:none;border-color:var(--calmo)}
+
+.meta{color:var(--ink3);font-size:11.5px;font-variant-numeric:tabular-nums;flex:none}
+.cresce{flex:1}
+.sub2{font-size:11px;color:var(--ink3);margin-top:1px}
+
+/* ---------- navegação entre as páginas ---------- */
+.nav{display:flex;gap:2px;background:var(--sup);border:1px solid var(--linha);
+  border-radius:9px;padding:2px;flex:none}
+.nav a{font-size:12.5px;font-weight:560;color:var(--ink3);padding:4px 11px;border-radius:7px}
+.nav a:hover{color:var(--ink);text-decoration:none}
+.nav a.atual{background:var(--cartao);color:var(--ink);
+  box-shadow:0 1px 2px rgba(0,0,0,.06)}
+
+/* ---------- painéis ---------- */
+.painel{background:var(--cartao);border:1px solid var(--linha);border-radius:12px;
+  display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.painel>.cab{display:flex;align-items:center;gap:9px;padding:11px 15px 9px;
+  font-size:10.5px;font-weight:660;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.painel>.corpo{padding:0 15px 14px;overflow:auto;min-height:0;flex:1}
+.painel>.corpo.semrolar{overflow:visible}
+
+/* ---------- status ---------- */
+#status{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);flex:none}
+#status .ponto{width:8px;height:8px;border-radius:50%;flex:none;position:relative;
+  background:currentColor;color:var(--ink3)}
+#status .ponto::after{content:'';position:absolute;inset:0;border-radius:50%;
+  background:currentColor;animation:anel 2s cubic-bezier(.2,.6,.3,1) infinite}
+@keyframes anel{0%{transform:scale(1);opacity:.5}70%,100%{transform:scale(2.9);opacity:0}}
+#status.ok{color:var(--bom)}          #status.ok .ponto{color:var(--pontoBom)}
+#status.atencao{color:var(--atencao)} #status.atencao .ponto{color:var(--pontoAtencao)}
+#status.ruim{color:var(--ruim)}       #status.ruim .ponto{color:var(--pontoRuim)}
+#status.pausado{color:var(--ink3)}    #status.pausado .ponto::after{animation:none}
+@media (prefers-reduced-motion: reduce){ #status .ponto::after{animation:none} }
+
+/* ---------- números ---------- */
+.nums{display:grid;gap:1px;background:var(--linha);border-radius:10px;
+  overflow:hidden;border:1px solid var(--linha)}
+.num{background:var(--cartao);padding:9px 11px}
+.num .r{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.num .v{font-size:20px;font-weight:660;font-variant-numeric:tabular-nums;
+  letter-spacing:-.02em;margin-top:1px}
+.num.mal .v{color:var(--ruim)} .num.aviso .v{color:var(--atencao)} .num.bem .v{color:var(--bom)}
+
+/* ---------- tabelas ---------- */
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-weight:560;color:var(--ink3);font-size:10px;text-transform:uppercase;
+  letter-spacing:.06em;padding:0 9px 6px 0;white-space:nowrap;position:sticky;top:0;
+  background:var(--cartao);z-index:1}
+td{padding:6px 9px 6px 0;border-top:1px solid var(--linha);vertical-align:top}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.clic{cursor:pointer}
+tr.clic:hover td{background:var(--sup)}
+
+.tag{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:20px;
+  border:1px solid var(--linha);color:var(--ink2);white-space:nowrap}
+.tag.ruim{color:var(--ruim);border-color:color-mix(in oklab,var(--ruim) 40%,transparent)}
+.tag.atencao{color:var(--atencao);border-color:color-mix(in oklab,var(--atencao) 40%,transparent)}
+.tag.bom{color:var(--bom);border-color:color-mix(in oklab,var(--bom) 40%,transparent)}
+
+/* barra proporcional dentro de célula de tabela */
+.barra{height:5px;border-radius:3px;background:var(--calmo);min-width:2px}
+.barra.mal{background:var(--ruim)}
+.trilho{background:var(--grid);border-radius:3px;overflow:hidden;margin-top:3px}
+
+.vazio{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;min-height:120px;color:var(--ink3);gap:6px;text-align:center;padding:20px}
+
+dialog{border:1px solid var(--linha);border-radius:14px;background:var(--cartao);color:var(--ink);
+  padding:0;max-width:min(1100px,calc(100vw - 40px));max-height:calc(100vh - 60px)}
+dialog::backdrop{background:rgba(0,0,0,.55)}
+.dlg{padding:18px;overflow:auto;max-height:calc(100vh - 96px)}
+.dlg h3{margin:0 0 4px;font-size:15px}
+.obs{font-size:11px;color:var(--ink3);margin-top:5px;line-height:1.45}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
+  color:var(--ink2);background:var(--sup);border:1px solid var(--linha);border-radius:6px;
+  padding:9px 11px;white-space:pre-wrap;word-break:break-word;overflow:auto}
