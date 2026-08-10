@@ -1,0 +1,551 @@
+<!doctype html>
+<!-- Desenvolvido por Luiz Fernando Riva Nekel -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor n8n</title>
+<style>
+  :root{
+    --sup:#fbfbfc; --cartao:#ffffff; --linha:#e4e7ea;
+    --ink:#101316; --ink2:#4d545b; --ink3:#828b93;
+    --calmo:#2f6fd0; --bom:#2c7a52; --atencao:#a06507; --ruim:#c0392b;
+    --pontoBom:#28a862; --pontoAtencao:#f2c014; --pontoRuim:#e0402c;
+    --grid:#eaedf0;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --sup:#0e1114; --cartao:#171b1f; --linha:#282e34;
+      --ink:#eef0f2; --ink2:#a9b1b9; --ink3:#79828b;
+      --calmo:#6fa8f5; --bom:#5cbd8a; --atencao:#e8bc4e; --ruim:#f0745c;
+      --pontoBom:#43c98a; --pontoAtencao:#f5cf3d; --pontoRuim:#f4614a;
+      --grid:#232930;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--sup);color:var(--ink);overflow:hidden;
+    font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased}
+
+  /* tudo cabe numa tela: faixa de veredito + duas colunas que rolam por dentro */
+  .app{height:100vh;max-width:1720px;margin:0 auto;padding:12px;
+    display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px}
+  .grade{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:12px;min-height:0}
+  .col{display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;gap:12px;min-height:0}
+
+  .painel{background:var(--cartao);border:1px solid var(--linha);border-radius:12px;
+    display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .painel>.cab{display:flex;align-items:center;gap:9px;padding:11px 15px 9px;
+    font-size:10.5px;font-weight:660;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+  .painel>.cab .cresce{flex:1}
+  .painel>.corpo{padding:0 15px 14px;overflow:auto;min-height:0;flex:1}
+  .painel>.corpo.semrolar{overflow:visible}
+
+  /* ---------- faixa de veredito (barra + hero fundidos) ---------- */
+  .veredito{display:flex;align-items:center;gap:16px;padding:13px 20px;
+    border:1px solid var(--linha);border-radius:14px;background:var(--cartao)}
+  .veredito .icone{font-size:30px;line-height:1;flex:none}
+  .veredito .n{font-size:38px;font-weight:680;letter-spacing:-.035em;line-height:1;flex:none}
+  .veredito .txt{font-size:16px;font-weight:620;letter-spacing:-.012em;white-space:nowrap}
+  .veredito .sub{color:var(--ink2);font-size:12.5px;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+  .veredito.ok{background:color-mix(in oklab,var(--bom) 9%,var(--cartao));
+    border-color:color-mix(in oklab,var(--bom) 32%,transparent)}
+  .veredito.ok .txt{color:var(--bom)}
+  .veredito.atencao{background:color-mix(in oklab,var(--atencao) 11%,var(--cartao));
+    animation:pulsaAtencao 2s ease-in-out infinite}
+  .veredito.atencao .txt,.veredito.atencao .n{color:var(--atencao)}
+  .veredito.ruim{background:color-mix(in oklab,var(--ruim) 12%,var(--cartao));
+    animation:pulsaRuim 2s ease-in-out infinite}
+  .veredito.ruim .txt,.veredito.ruim .n{color:var(--ruim)}
+  @keyframes pulsaRuim{
+    0%,100%{border-color:color-mix(in oklab,var(--ruim) 38%,transparent);
+            box-shadow:0 0 0 0 color-mix(in oklab,var(--ruim) 34%,transparent)}
+    55%    {border-color:color-mix(in oklab,var(--ruim) 92%,transparent);
+            box-shadow:0 0 0 9px color-mix(in oklab,var(--ruim) 0%,transparent)}
+  }
+  @keyframes pulsaAtencao{
+    0%,100%{border-color:color-mix(in oklab,var(--atencao) 34%,transparent);
+            box-shadow:0 0 0 0 color-mix(in oklab,var(--atencao) 32%,transparent)}
+    55%    {border-color:color-mix(in oklab,var(--atencao) 90%,transparent);
+            box-shadow:0 0 0 9px color-mix(in oklab,var(--atencao) 0%,transparent)}
+  }
+
+  #status{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;
+    letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);flex:none}
+  #status .ponto{width:8px;height:8px;border-radius:50%;flex:none;position:relative;
+    background:currentColor;color:var(--ink3)}
+  #status .ponto::after{content:'';position:absolute;inset:0;border-radius:50%;
+    background:currentColor;animation:anel 2s cubic-bezier(.2,.6,.3,1) infinite}
+  @keyframes anel{0%{transform:scale(1);opacity:.5}70%,100%{transform:scale(2.9);opacity:0}}
+  #status.ok{color:var(--bom)}          #status.ok .ponto{color:var(--pontoBom)}
+  #status.atencao{color:var(--atencao)} #status.atencao .ponto{color:var(--pontoAtencao)}
+  #status.ruim{color:var(--ruim)}       #status.ruim .ponto{color:var(--pontoRuim)}
+  #status.pausado{color:var(--ink3)}    #status.pausado .ponto::after{animation:none}
+  @media (prefers-reduced-motion: reduce){
+    #status .ponto::after,.veredito.atencao,.veredito.ruim{animation:none}
+  }
+
+  button{font:inherit;font-size:12.5px;color:var(--ink2);background:transparent;
+    border:1px solid var(--linha);border-radius:7px;padding:5px 10px;cursor:pointer;flex:none}
+  button:hover{color:var(--ink);border-color:var(--ink3)}
+  .meta{color:var(--ink3);font-size:11.5px;font-variant-numeric:tabular-nums;flex:none}
+  a{color:var(--calmo);text-decoration:none} a:hover{text-decoration:underline}
+
+  /* ---------- cartões de problema ---------- */
+  .prob{border:1px solid var(--linha);border-left:4px solid var(--ink3);
+    border-radius:10px;padding:11px 13px;margin-bottom:9px;background:var(--sup)}
+  .prob.ruim{border-left-color:var(--ruim)} .prob.atencao{border-left-color:var(--atencao)}
+  .prob .cab2{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+  .prob .tipo{font-size:10px;font-weight:660;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+  .prob.ruim .tipo{color:var(--ruim)} .prob.atencao .tipo{color:var(--atencao)}
+  .prob .grande{font-size:19px;font-weight:660;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .prob .titulo{font-size:14px;font-weight:600;width:100%;margin-top:1px;line-height:1.35}
+  .prob .det{color:var(--ink2);font-size:12.5px;margin-top:4px}
+  .prob .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
+    color:var(--ink2);background:var(--cartao);border:1px solid var(--linha);border-radius:6px;
+    padding:6px 8px;margin-top:7px;max-height:56px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+  .prob .acoes{display:flex;gap:8px;margin-top:9px;align-items:center;font-size:12.5px}
+  .vazio{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    height:100%;color:var(--ink3);gap:6px;text-align:center}
+  .vazio .g{font-size:34px;color:var(--bom)}
+
+  /* ---------- números ---------- */
+  .nums{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--linha);
+    border-radius:10px;overflow:hidden;border:1px solid var(--linha)}
+  .num{background:var(--cartao);padding:9px 11px}
+  .num .r{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink3);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .num .v{font-size:20px;font-weight:660;font-variant-numeric:tabular-nums;letter-spacing:-.02em;margin-top:1px}
+  .num.mal .v{color:var(--ruim)} .num.aviso .v{color:var(--atencao)} .num.bem .v{color:var(--bom)}
+
+  /* ---------- em andamento ---------- */
+  .exec{display:flex;align-items:center;gap:9px;padding:5px 0;border-top:1px solid var(--linha);font-size:12.5px}
+  .exec:first-child{border-top:none}
+  .exec .t{font-variant-numeric:tabular-nums;font-weight:640;flex:none;min-width:62px}
+  .exec.lento .t{color:var(--atencao)}
+  .exec .nm{color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .girando{width:8px;height:8px;border-radius:50%;border:2px solid var(--calmo);
+    border-top-color:transparent;animation:gira .9s linear infinite;flex:none}
+  @keyframes gira{to{transform:rotate(360deg)}}
+
+  /* ---------- agendamentos resumidos ---------- */
+  .agl{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--linha);font-size:12.5px}
+  .agl:first-child{border-top:none}
+  .agl .c{font-variant-numeric:tabular-nums;font-weight:640;min-width:26px;text-align:right;flex:none}
+  .agl .nm{color:var(--ink2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pt{width:7px;height:7px;border-radius:50%;flex:none}
+
+  .legenda{display:flex;gap:13px;font-size:11px;color:var(--ink3);margin-bottom:5px}
+  .amostra{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:4px}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;font-weight:560;color:var(--ink3);font-size:10px;text-transform:uppercase;
+    letter-spacing:.06em;padding:0 9px 6px 0;white-space:nowrap}
+  td{padding:6px 9px 6px 0;border-top:1px solid var(--linha);vertical-align:top}
+  td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tag{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:20px;
+    border:1px solid var(--linha);color:var(--ink2);white-space:nowrap}
+  .tag.ruim{color:var(--ruim);border-color:color-mix(in oklab,var(--ruim) 40%,transparent)}
+  .tag.atencao{color:var(--atencao);border-color:color-mix(in oklab,var(--atencao) 40%,transparent)}
+  .sub2{font-size:11px;color:var(--ink3);margin-top:1px}
+
+  dialog{border:1px solid var(--linha);border-radius:14px;background:var(--cartao);color:var(--ink);
+    padding:0;max-width:min(1100px,calc(100vw - 40px));max-height:calc(100vh - 60px)}
+  dialog::backdrop{background:rgba(0,0,0,.55)}
+  .dlg{padding:18px;overflow:auto;max-height:calc(100vh - 96px)}
+  .dlg h3{margin:0 0 4px;font-size:15px}
+  label{display:block;font-size:12px;color:var(--ink2);margin:13px 0 5px}
+  input{width:100%;padding:8px 10px;font:inherit;font-size:13.5px;color:var(--ink);
+    background:var(--sup);border:1px solid var(--linha);border-radius:8px}
+  .linha-btn{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+  .obs{font-size:11px;color:var(--ink3);margin-top:5px;line-height:1.45}
+
+  @media (max-width:1050px){
+    body{overflow:auto}
+    .app{height:auto}
+    .grade{grid-template-columns:1fr}
+    .col{grid-template-rows:auto}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="veredito" id="hero">
+    <span class="icone" id="heroIcone">…</span>
+    <span class="n" id="heroN" hidden></span>
+    <span class="txt" id="heroTxt">carregando</span>
+    <span class="sub" id="heroSub"></span>
+    <span id="status"><span class="ponto"></span><span id="statusNome">conectando</span></span>
+    <span class="meta" id="quando"></span>
+    <button id="btPausa">Pausar</button>
+    <button id="btConfig">Configuração</button>
+  </div>
+
+  <div class="grade">
+
+    <div class="painel">
+      <div class="cab"><span id="tituloProb">O que precisa de atenção</span><span class="cresce"></span>
+        <span class="meta" id="contaProb"></span></div>
+      <div class="corpo" id="problemas"></div>
+    </div>
+
+    <div class="col">
+
+      <div class="nums" id="nums"></div>
+
+      <div class="painel">
+        <div class="cab">Execuções por minuto — última hora<span class="cresce"></span>
+          <span class="meta">pico = loop</span></div>
+        <div class="corpo semrolar">
+          <div class="legenda">
+            <span><span class="amostra" style="background:var(--calmo)"></span>ok</span>
+            <span><span class="amostra" style="background:var(--ruim)"></span>erro</span>
+          </div>
+          <div id="grafico"></div>
+        </div>
+      </div>
+
+      <div class="painel">
+        <div class="cab">Em andamento<span class="cresce"></span>
+          <span class="meta" id="contaAndando"></span></div>
+        <div class="corpo" id="andando"></div>
+      </div>
+
+      <div class="painel">
+        <div class="cab">Agendamentos<span class="cresce"></span>
+          <button id="btTabela">tabela</button><button id="btCron">reconferir</button></div>
+        <div class="corpo semrolar" id="agResumo"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<dialog id="dlgTabela"><div class="dlg">
+  <h3>Agendamentos: configurado × executou</h3>
+  <div class="obs" id="obsTabela"></div>
+  <div style="margin:12px 0"><button id="btCopiarCron">Copiar relatório</button>
+    <button id="btFecharTabela">Fechar</button></div>
+  <table id="tbCron"></table>
+  <h3 style="margin-top:22px">Volume por fluxo — última hora</h3>
+  <table id="tbFluxos"></table>
+</div></dialog>
+
+<dialog id="dlgConfig"><div class="dlg">
+  <h3>Configuração</h3>
+  <div class="obs">A chave fica no servidor local e nunca é enviada ao navegador.</div>
+  <label for="inBase">URL base do n8n</label>
+  <input type="text" id="inBase" placeholder="https://n8n.suaempresa.com">
+  <label for="inChave">Chave da API (X-N8N-API-KEY)</label>
+  <input type="password" id="inChave" placeholder="deixe vazio para manter a atual" autocomplete="off">
+  <div class="obs" id="obsChave"></div>
+  <div class="obs" id="obsCaminho"></div>
+  <div class="linha-btn">
+    <button id="btTestar">Testar conexão</button>
+    <button id="btFechar">Fechar</button>
+    <button id="btSalvar">Salvar</button>
+  </div>
+  <div class="obs" id="obsTeste"></div>
+</div></dialog>
+
+<script>
+const $ = s => document.querySelector(s)
+let ultimo = null, ultimoCron = null, pausado = false
+
+const nf = n => new Intl.NumberFormat('pt-BR').format(n)
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+const hora = i => i ? new Date(i).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '—'
+const horaS = i => i ? new Date(i).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—'
+const dur = m => {
+  if (m == null) return '—'
+  const s=Math.max(0,Math.round(m*60)), h=Math.floor(s/3600), mm=Math.floor((s%3600)/60), r=s%60
+  return h ? `${h}h ${String(mm).padStart(2,'0')}m` : mm ? `${mm}m ${String(r).padStart(2,'0')}s` : `${r}s`
+}
+
+function pintarStatus(nivel, rotulo){ $('#status').className = nivel; $('#statusNome').textContent = rotulo }
+
+function juntarProblemas(d, cron){
+  const P = []
+  for (const g of d.erros || []) P.push({
+    nivel:'ruim', tipo:'erro de execução',
+    resumo:`${g.fluxo}: ${g.total}× erro`, titulo:g.fluxo,
+    grande: g.total>1 ? `${nf(g.total)}×` : null,
+    det:[g.no?`nó <b>${esc(g.no)}</b>`:null, g.total>1?`entre ${hora(g.primeiro)} e ${hora(g.ultimo)}`:`às ${horaS(g.ultimo)}`].filter(Boolean).join(' · '),
+    mono:g.mensagem||null,
+    link:`${d.baseUrl}/workflow/${g.workflowId}/executions/${g.idExemplo}`,
+    copiarGrupo:(d.erros||[]).indexOf(g),
+  })
+  for (const e of (d.rodando||[]).filter(x => (x.minutos??0) >= d.limiteTravadaMin)) P.push({
+    nivel:'atencao', tipo:'execução travada',
+    resumo:`${e.fluxo}: ${dur(e.minutos)} rodando`, titulo:e.fluxo,
+    grande:dur(e.minutos), tempoDe:e.inicio,
+    det:`desde ${horaS(e.inicio)}, sem terminar · limite ${d.limiteTravadaMin} min`,
+    link:`${d.baseUrl}/workflow/${e.workflowId}/executions/${e.id}`,
+  })
+  for (const l of (cron?.linhas||[]).filter(x => x.veredito==='nunca-executou'||x.veredito==='com-falhas')) P.push({
+    nivel: l.veredito==='nunca-executou' ? 'ruim' : 'atencao',
+    tipo: l.veredito==='nunca-executou' ? 'agendamento não executou' : 'agendamento com falhas',
+    resumo:`${l.fluxo}: ${l.totalPerdidas} perdida(s)`,
+    titulo:`${l.fluxo} — nó ${l.no}`, grande:`${l.cumpridas}/${l.esperado}`,
+    det:`${esc(l.regra)} · verificado ${l.janelaVerificadaHoras}h · ${l.totalPerdidas} perdida(s)`,
+    mono: l.perdidas?.length ? 'previstos sem execução: ' + l.perdidas.map(hora).join(', ') : null,
+    link:`${d.baseUrl}/workflow/${l.workflowId}`,
+  })
+  const o = {ruim:0, atencao:1}
+  return P.sort((a,b)=>o[a.nivel]-o[b.nivel])
+}
+
+function pintarVeredito(P, t){
+  const graves = P.filter(p=>p.nivel==='ruim').length
+  const avisos = P.filter(p=>p.nivel==='atencao').length
+  const nivel = graves ? 'ruim' : avisos ? 'atencao' : 'ok'
+  $('#hero').className = 'veredito ' + nivel
+  pintarStatus(nivel, graves?'erro':avisos?'atenção':'tudo ok')
+  $('#contaProb').textContent = P.length ? `${P.length} item(ns)` : ''
+  if (!P.length){
+    $('#heroIcone').textContent='✓'; $('#heroN').hidden=true
+    $('#heroTxt').textContent='Tudo em ordem'
+    $('#heroSub').textContent = `${nf(t.execucoesHora)} execuções na última hora, nenhum erro, nada travado`
+    return
+  }
+  const n = graves || avisos
+  $('#heroIcone').textContent = graves ? '✕' : '⚠'
+  $('#heroN').hidden=false; $('#heroN').textContent = n
+  $('#heroTxt').textContent = n===1 ? 'coisa precisa de atenção' : 'coisas precisam de atenção'
+  $('#heroSub').textContent = P.map(p=>p.resumo).join('  ·  ')
+}
+
+function pintarProblemas(P){
+  if (!P.length){
+    $('#problemas').innerHTML = `<div class="vazio"><div class="g">✓</div><div>Nenhum erro, nada travado,<br>agendamentos em dia.</div></div>`
+    return
+  }
+  $('#problemas').innerHTML = P.map(p=>`
+    <div class="prob ${p.nivel}">
+      <div class="cab2"><span class="tipo">${esc(p.tipo)}</span>
+        ${p.grande?`<span class="grande"${p.tempoDe?` data-tempo="${esc(p.tempoDe)}"`:''}>${esc(p.grande)}</span>`:''}
+        <div class="titulo">${esc(p.titulo)}</div></div>
+      <div class="det">${p.det}</div>
+      ${p.mono?`<div class="mono">${esc(p.mono)}</div>`:''}
+      <div class="acoes">
+        ${p.copiarGrupo!=null?`<button data-grupo="${p.copiarGrupo}">Copiar diagnóstico</button>`:''}
+        <a href="${esc(p.link)}" target="_blank">abrir no n8n →</a>
+      </div>
+    </div>`).join('')
+}
+
+function pintarNums(d, cron){
+  const erros = (d.erros||[]).reduce((n,g)=>n+g.total,0)
+  const emDia = (cron?.linhas||[]).filter(l=>l.veredito==='ok').length
+  const cs = [
+    ['erros recentes', nf(erros), erros?'mal':'bem'],
+    ['execuções/h', (d.tiles.truncado?'≥':'')+nf(d.tiles.execucoesHora), ''],
+    ['em andamento', nf(d.tiles.rodando), ''],
+    ['agend. em dia', cron?nf(emDia):'—', cron&&emDia?'bem':''],
+  ]
+  $('#nums').innerHTML = cs.map(([r,v,c])=>`<div class="num ${c}"><div class="r">${r}</div><div class="v">${v}</div></div>`).join('')
+}
+
+function pintarAndando(lista, lim){
+  const L = (lista||[]).slice().sort((a,b)=>(b.minutos??0)-(a.minutos??0))
+  $('#contaAndando').textContent = L.length ? `${L.length}` : ''
+  if (!L.length){ $('#andando').innerHTML = `<div class="sub2" style="padding:4px 0">Nada em execução agora.</div>`; return }
+  $('#andando').innerHTML = L.map(e=>{
+    const lento = (e.minutos??0) >= lim
+    return `<div class="exec ${lento?'lento':''}">
+      ${lento?'<span class="pt" style="background:var(--pontoAtencao)"></span>':'<span class="girando"></span>'}
+      <span class="t" data-tempo="${esc(e.inicio||'')}">${dur(e.minutos)}</span>
+      <span class="nm" title="${esc(e.fluxo)}">${esc(e.fluxo)}</span></div>`
+  }).join('')
+}
+
+const VER = {
+  'nunca-executou':['ruim','não executou'], 'com-falhas':['atencao','perdeu ocorrências'],
+  'sem-dados':['','sem execução retida'], 'nao-comparavel':['','não comparável'],
+  'ok':['','em dia'], 'sem-janela':['','sem ocorrência'], 'inativo':['','inativo'],
+}
+const COR_VER = {ruim:'var(--pontoRuim)', atencao:'var(--pontoAtencao)', '':'var(--ink3)'}
+
+function pintarAgResumo(cron){
+  if (!cron){ $('#agResumo').innerHTML = `<div class="sub2">conferindo…</div>`; return }
+  const contas = {}
+  for (const l of cron.linhas||[]) contas[l.veredito] = (contas[l.veredito]||0)+1
+  const ordem = ['nunca-executou','com-falhas','ok','sem-dados','sem-janela','nao-comparavel','inativo']
+  const linhas = ordem.filter(v=>contas[v]).map(v=>{
+    const [c,rot] = VER[v]||['',v]
+    return `<div class="agl"><span class="pt" style="background:${COR_VER[c]}"></span>
+      <span class="c">${contas[v]}</span><span class="nm">${rot}</span></div>`
+  })
+  $('#agResumo').innerHTML = linhas.join('') ||
+    `<div class="sub2">Nenhum Schedule Trigger encontrado.</div>`
+}
+
+function grafico(serie){
+  const L=26,B=15,T=6,R=4,A=96
+  const el = $('#grafico'); const W = Math.max(260, el.clientWidth || 300)
+  const max = Math.max(1, ...serie.map(d=>d.ok+d.erro))
+  const bw=(W-L-R)/serie.length, larg=Math.max(2,bw-2)
+  const y=v=>T+(A-T-B)*(1-v/max)
+  let g=''
+  for (const v of [...new Set([0,max])]){
+    g+=`<line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>`
+    g+=`<text x="${L-5}" y="${y(v)+3.5}" text-anchor="end" font-size="9" fill="var(--ink3)">${v}</text>`
+  }
+  serie.forEach((d,i)=>{
+    const x=L+i*bw+(bw-larg)/2, tot=d.ok+d.erro
+    if(!tot) return
+    const hOk=(A-T-B)*d.ok/max, hEr=(A-T-B)*d.erro/max, base=A-B
+    const t=`${hora(d.minuto)} — ${d.ok} ok${d.erro?`, ${d.erro} erro`:''}`
+    if(d.erro) g+=`<rect x="${x}" y="${base-hEr-(d.ok?hOk+2:0)}" width="${larg}" height="${Math.max(2,hEr)}" rx="2" fill="var(--ruim)"><title>${t}</title></rect>`
+    if(d.ok)  g+=`<rect x="${x}" y="${base-hOk}" width="${larg}" height="${Math.max(2,hOk)}" rx="2" fill="var(--calmo)"><title>${t}</title></rect>`
+  })
+  g+=`<text x="${L}" y="${A-3}" font-size="9" fill="var(--ink3)">${hora(serie[0].minuto)}</text>`
+  g+=`<text x="${W-R}" y="${A-3}" text-anchor="end" font-size="9" fill="var(--ink3)">agora</text>`
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${A}" width="100%" height="${A}" preserveAspectRatio="none" role="img" aria-label="execuções por minuto na última hora">${g}</svg>`
+}
+
+function tabelaCron(d){
+  if(!d.linhas?.length){ $('#tbCron').innerHTML='<tbody><tr><td class="sub2">Nenhum Schedule Trigger.</td></tr></tbody>'; return }
+  $('#obsTabela').textContent = `Janela de até ${d.janelaHoras}h · tolerância ${d.toleranciaMin} min · fuso padrão ${d.fusoPadrao}. Cada linha só é julgada onde existe execução retida como prova; ausência de dado nunca conta como falha.`
+  $('#tbCron').innerHTML='<thead><tr><th>Fluxo / nó</th><th>Regra</th><th>Verif.</th><th>Prev.</th><th>Cumpr.</th><th>Atraso</th><th>Situação</th></tr></thead><tbody>'+
+    d.linhas.map(l=>{
+      const [c,r]=VER[l.veredito]||['',l.veredito]
+      return `<tr><td>${esc(l.fluxo)}<div class="sub2">nó: ${esc(l.no)} · ${esc(l.fuso)}</div>${l.detalhe?`<div class="sub2">${esc(l.detalhe)}</div>`:''}</td>
+        <td class="sub2">${esc(l.regra)}</td>
+        <td class="n">${l.janelaVerificadaHoras==null?'—':l.janelaVerificadaHoras+'h'}</td>
+        <td class="n">${l.esperado??'—'}</td>
+        <td class="n">${l.cumpridas??'—'}${l.totalPerdidas?` <span class="tag ruim">−${l.totalPerdidas}</span>`:''}</td>
+        <td class="n">${l.atrasoMedioSeg==null?'—':l.atrasoMedioSeg+'s'}</td>
+        <td><span class="tag ${c}">${r}</span></td></tr>`
+    }).join('')+'</tbody>'
+}
+function tabelaFluxos(lista){
+  if(!lista?.length){ $('#tbFluxos').innerHTML='<tbody><tr><td class="sub2">Sem execuções.</td></tr></tbody>'; return }
+  $('#tbFluxos').innerHTML='<thead><tr><th>Fluxo</th><th>Execuções</th><th>Erros</th></tr></thead><tbody>'+
+    lista.map(f=>`<tr><td>${esc(f.fluxo)}</td><td class="n">${nf(f.total)}</td>
+      <td class="n">${f.erros?`<span class="tag ruim">${nf(f.erros)}</span>`:'0'}</td></tr>`).join('')+'</tbody>'
+}
+
+setInterval(()=>{
+  document.querySelectorAll('[data-tempo]').forEach(el=>{
+    const i=el.dataset.tempo; if(!i) return
+    el.textContent = dur((Date.now()-new Date(i).getTime())/60000)
+  })
+},1000)
+
+async function puxar(){
+  if (pausado) return
+  try{
+    const d = await (await fetch('/api/state',{cache:'no-store'})).json()
+    if (!d.ok){
+      const casos = {
+        'erro-api':  ['ruim','n8n offline','Instância do n8n offline','o painel está no ar, mas não consegue falar com o n8n'],
+        'sem-chave': ['ruim','não configurado','Falta configurar a chave','abra Configuração e informe a chave da API'],
+        'pausado':   ['pausado','pausado','Coleta pausada','clique em Retomar'],
+      }
+      const [nivel,rot,titulo,sub] = casos[d.motivo] || ['ruim','sem dados','Sem dados do n8n','']
+      $('#hero').className = 'veredito ' + (nivel==='pausado'?'':nivel)
+      $('#heroIcone').textContent = nivel==='pausado'?'⏸':'✕'
+      $('#heroN').hidden = true
+      $('#heroTxt').textContent = titulo
+      $('#heroSub').textContent = d.detalhe ? `${sub} — ${d.detalhe}` : sub
+      pintarStatus(nivel, rot)
+      $('#problemas').innerHTML=''; $('#andando').innerHTML=''; $('#nums').innerHTML=''
+      return
+    }
+    ultimo = d
+    $('#quando').textContent = horaS(d.momento)
+    const P = juntarProblemas(d, ultimoCron)
+    pintarVeredito(P, d.tiles); pintarProblemas(P)
+    pintarNums(d, ultimoCron); pintarAndando(d.rodando, d.limiteTravadaMin)
+    grafico(d.serie); tabelaFluxos(d.porFluxo)
+  } catch { pintarStatus('ruim','painel offline'); $('#quando').textContent='' }
+}
+
+async function puxarCron(recarregar){
+  try{
+    const d = await (await fetch('/api/cron'+(recarregar?'?recarregar=1':''))).json()
+    if (!d.ok) return
+    ultimoCron = d
+    tabelaCron(d); pintarAgResumo(d)
+    if (ultimo){ const P=juntarProblemas(ultimo,d); pintarVeredito(P,ultimo.tiles); pintarProblemas(P); pintarNums(ultimo,d) }
+  } catch {}
+}
+
+async function copiar(t,b){
+  try{ await navigator.clipboard.writeText(t) }
+  catch{ const x=document.createElement('textarea'); x.value=t; document.body.appendChild(x); x.select(); document.execCommand('copy'); x.remove() }
+  if(b){ const a=b.textContent; b.textContent='Copiado ✓'; setTimeout(()=>b.textContent=a,1600) }
+}
+
+async function dumpDoGrupo(g){
+  const d = await (await fetch('/api/execucao?id='+encodeURIComponent(g.idExemplo))).json()
+  const cab = g.total>1
+    ? `> Este erro ocorreu **${g.total} vezes** na última hora (de ${hora(g.primeiro)} a ${hora(g.ultimo)}).\n`
+      + `> Execuções afetadas: ${g.ids.map(i=>'#'+i).join(', ')}${g.total>g.ids.length?' …':''}\n`
+      + `> Abaixo, o diagnóstico completo de uma delas (#${g.idExemplo}).\n` : ''
+  return cab + (d.ok ? d.diagnostico : `## Execução ${g.idExemplo}\nfalha ao obter: ${d.erro||''}`)
+}
+
+document.addEventListener('click', async ev=>{
+  const b = ev.target.closest('[data-grupo]'); if(!b) return
+  const g = ultimo?.erros?.[Number(b.dataset.grupo)]; if(!g) return
+  b.textContent='…'; await copiar(await dumpDoGrupo(g), b)
+})
+
+$('#btPausa').onclick = ev=>{
+  pausado=!pausado; ev.target.textContent = pausado?'Retomar':'Pausar'
+  if(pausado) pintarStatus('pausado','pausado'); else puxar()
+}
+$('#btCron').onclick = ()=>puxarCron(true)
+$('#btTabela').onclick = ()=>$('#dlgTabela').showModal()
+$('#btFecharTabela').onclick = ()=>$('#dlgTabela').close()
+$('#btCopiarCron').onclick = async ev=>{
+  if(!ultimoCron) return
+  const L=[`# Agendamentos: configurado × executou`,'',
+    `Janela até ${ultimoCron.janelaHoras}h · tolerância ${ultimoCron.toleranciaMin} min · fuso padrão ${ultimoCron.fusoPadrao}`,'']
+  for(const l of ultimoCron.linhas){
+    L.push(`## ${l.fluxo} — nó \`${l.no}\``)
+    L.push(`- regra: ${l.regra} (fuso ${l.fuso})`)
+    L.push(`- ativo: ${l.ativo?'sim':'NÃO'}${l.desativado?' · nó desativado':''}`)
+    L.push(`- situação: **${l.veredito}**${l.detalhe?` — ${l.detalhe}`:''}`)
+    if(l.esperado!=null) L.push(`- verificado em ${l.janelaVerificadaHoras}h · previstas ${l.esperado} · cumpridas ${l.cumpridas} · perdidas ${l.totalPerdidas}`)
+    if(l.atrasoMedioSeg!=null) L.push(`- atraso médio: ${l.atrasoMedioSeg}s`)
+    if(l.totalPerdidas) L.push(`- horários perdidos: ${l.perdidas.join(', ')}`)
+    L.push(`- última execução: ${l.ultimaExec??'nenhuma'}`); L.push('')
+  }
+  await copiar(L.join('\n'), ev.target)
+}
+
+$('#btConfig').onclick = async ()=>{
+  const d = await (await fetch('/api/config')).json()
+  $('#inBase').value=d.baseUrl||''; $('#inChave').value=''
+  $('#obsChave').textContent = d.temChave?'Já existe uma chave salva. Deixe vazio para mantê-la.':'Nenhuma chave salva ainda.'
+  $('#obsCaminho').textContent = 'Guardada em: '+d.caminhoConfig
+  $('#obsTeste').textContent=''; $('#dlgConfig').showModal()
+}
+$('#btFechar').onclick = ()=>$('#dlgConfig').close()
+$('#btSalvar').onclick = async ()=>{
+  await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({baseUrl:$('#inBase').value, apiKey:$('#inChave').value, ativo:true})})
+  $('#inChave').value=''; $('#dlgConfig').close(); puxar()
+}
+$('#btTestar').onclick = async ()=>{
+  $('#obsTeste').textContent='testando…'
+  await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({baseUrl:$('#inBase').value, apiKey:$('#inChave').value})})
+  $('#inChave').value=''
+  const d = await (await fetch('/api/teste',{method:'POST'})).json()
+  $('#obsTeste').textContent = d.ok?'Conexão OK ✓':'Falhou: '+(d.erro||'')
+}
+
+addEventListener('resize', ()=>{ if(ultimo) grafico(ultimo.serie) })
+pintarAgResumo(null)
+puxar(); setInterval(puxar, 10000)
+puxarCron(false); setInterval(()=>puxarCron(false), 300000)
+</script>
+</body>
+</html>

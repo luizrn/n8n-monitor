@@ -1,0 +1,16 @@
+# A config guarda a chave da API. Ela vive em %LOCALAPPDATA%\n8n-monitor\,
+# fora deste repositorio — mas se algum dia alguem apontar para o projeto,
+# estas regras evitam o acidente.
+config.json
+*.local.json
+.env
+.env.*
+
+node_modules/
+npm-debug.log*
+
+# saidas de diagnostico (podem conter dados de execucao)
+*.dump.json
+*.exec.json
+/tmp/
+/out/
