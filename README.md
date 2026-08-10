@@ -72,6 +72,16 @@ Cada uma cabe numa tela, sem rolagem de página. Compartilham `public/base.css`;
 
 **À direita**: números da última hora, execuções por minuto, o que está rodando com cronômetro vivo e o resumo dos agendamentos. A tabela completa abre em modal, para não custar altura.
 
+**Toasts acumulativos** no canto inferior direito, para alertas vermelhos e amarelos. Um toast por **problema**, não por ocorrência:
+
+- chave inédita → abre um toast
+- mesma chave, mesma magnitude → **silêncio** (o painel consulta a cada 10s; sem isso um único fluxo quebrado geraria seis toasts por minuto)
+- mesma chave, magnitude maior → atualiza o contador `×N`, reinicia o tempo e dá um pulso, porque a situação piorou de verdade
+
+O controle no rodapé ajusta o tempo até fechar, de **5 a 60 segundos**, e fica salvo no navegador. Passar o mouse sobre um toast congela a contagem — ninguém consegue ler algo que está fugindo. Ficam no máximo cinco na tela; os mais antigos saem.
+
+Na primeira carga os toasts ficam suprimidos de propósito: os cartões já mostram o estado, e toast deve significar *mudou desde que você está olhando*.
+
 ### Dashboard
 
 Períodos de 1h a 7d. Traz execuções, erros, taxa de erro, fluxos ativos e duração mediana e p95; o gráfico de volume ao longo do tempo; e três recortes — **maior volume**, **mais falhas** e **mais lentos (p95)**.

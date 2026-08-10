@@ -48,6 +48,24 @@ A linha de saúde conta erros a partir dos **mesmos grupos** que geram os cartõ
 
 Estavam ambos certos e o conjunto estava errado. Um painel que se contradiz perde a credibilidade inteira, não só o número divergente.
 
+## Toast alerta mudança, não estado
+
+O painel consulta a API a cada 10 segundos. Um toast por resultado de consulta significaria seis alertas por minuto para um único fluxo quebrado — e um alerta que aparece sozinho seis vezes por minuto é um alerta que se aprende a ignorar.
+
+Por isso o toast tem chave estável e só se manifesta quando algo **muda**:
+
+| situação | o que acontece |
+|---|---|
+| chave inédita | abre |
+| mesma chave, mesma magnitude | silêncio |
+| mesma chave, magnitude maior | contador `×N`, tempo reiniciado, pulso |
+
+Silêncio passa a significar "estável" e movimento passa a significar "piorou". É a mesma lógica do agrupamento de erros, aplicada ao tempo em vez de à lista.
+
+A supressão na primeira carga vem do mesmo raciocínio: abrir a página com cinco problemas já visíveis nos cartões e receber cinco toasts é ruído, não informação.
+
+E o mouse sobre o toast congela a contagem. Um alerta que foge antes de ser lido não alertou nada.
+
 ## Sem dependências
 
 Node 18+ tem `fetch`. Um avaliador de cron cabe em 150 linhas. Um painel cabe num HTML. Não há build, não há `node_modules`, não há alerta de vulnerabilidade em transitiva de biblioteca de gráfico — para uma ferramenta que existe para ser confiável quando o resto está quebrado, isso é o requisito principal.
