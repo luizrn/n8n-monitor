@@ -20,7 +20,10 @@ O navegador **nunca** fala com o n8n. Toda chamada passa pelo servidor local, qu
 |---|---|
 | `server.mjs` | HTTP, config, agregação, redação de segredos, conferência de agendamentos |
 | `cron.mjs` | avaliador de cron e comparação previsto × executado |
-| `public/index.html` | a interface inteira: HTML, CSS e JS num arquivo, sem build |
+| `public/base.css` | tokens e componentes compartilhados pelas três páginas |
+| `public/index.html` | Monitor — o painel de alerta |
+| `public/dashboard.html` | Dashboard — volume, erros e duração ao longo do tempo |
+| `public/logs.html` | Logs — busca de execuções |
 | `scripts/watch-n8n.ps1` | monitor de linha única para consumo por agente ou log |
 | `scripts/diag-exec.mjs` | peso e tempo por nó de uma execução |
 | `scripts/dump-wf.mjs` | nós, conexões e código de um workflow |
@@ -70,6 +73,22 @@ Quando não há erro na janela de uma hora, `erros` recai nos últimos erros ret
 ```
 
 O detalhe (nó e mensagem) é buscado **só para o exemplar mais recente de cada grupo**, no máximo 10 grupos. Buscar por execução seria uma chamada por ocorrência: 200 erros iguais viravam 200 requisições para descobrir a mesma coisa.
+
+### `GET /api/logs`
+
+Filtra sobre um **cache curto** (30s) da lista recente, em memória. Sem ele, cada tecla digitada na busca dispararia paginação remota.
+
+Parâmetros: `q` (nome do fluxo ou id), `status`, `modo` (listas separadas por vírgula), `horas`, `pagina`, `limite`.
+
+As facetas `porStatus` e `porModo` são calculadas sobre o conjunto **já filtrado** por busca e período — assim o contador do botão bate com o que o clique produz, em vez de prometer resultados que o filtro atual não entrega.
+
+### `GET /api/dashboard?horas=N`
+
+Agrega sobre o mesmo cache. O passo do gráfico se adapta à janela: 1 min até 2h, 10 min até 12h, 1 hora acima disso.
+
+`coberturaHoras` informa **quanto do período pedido a retenção realmente cobre**. A página usa esse número para avisar quando os dados não alcançam o que foi pedido.
+
+A profundidade de leitura acompanha a janela — 10 páginas até 2h, 30 até 12h, 60 acima — porque numa instância com alto volume 10 páginas (2.500 execuções) podem cobrir menos de duas horas. O cache guarda com quantas páginas foi montado e relê quando alguém pede mais fundo.
 
 ### `GET /api/cron`
 

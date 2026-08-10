@@ -44,7 +44,17 @@ com permissão `0600`. O endpoint `GET /api/config` responde apenas `temChave: t
 
 O diagnóstico que o botão **Copiar** gera passa por uma **redação automática de credenciais**: qualquer chave contendo `token`, `apikey`, `secret`, `senha`, `password`, `authorization`, `cookie`, `bearer` ou `credential` sai como `[REDIGIDO]`, e o mesmo vale para o par `{name: "token", value: "..."}` que o n8n usa em parâmetros de nós HTTP. Sem isso, colar o diagnóstico num chat vazaria os tokens que estão em texto puro dentro dos workflows.
 
-## O que aparece na tela
+## Três páginas
+
+| rota | para quê |
+|---|---|
+| `/` | **Monitor** — bater o olho e saber se tem algo errado agora |
+| `/dashboard` | **Dashboard** — volume, taxa de erro e duração ao longo do tempo |
+| `/logs` | **Logs** — buscar uma execução específica |
+
+Cada uma cabe numa tela, sem rolagem de página. Compartilham `public/base.css`; nenhuma tem build, framework ou dependência.
+
+### Monitor
 
 **Status no topo** — cor e nome, pulsando:
 
@@ -60,7 +70,21 @@ O diagnóstico que o botão **Copiar** gera passa por uma **redação automátic
 
 **Linha de saúde** — tudo que está bem cabe em uma linha.
 
-**Dobrados** (só abrem se você quiser): execuções por minuto na última hora, a conferência de agendamentos completa e o volume por fluxo.
+**À direita**: números da última hora, execuções por minuto, o que está rodando com cronômetro vivo e o resumo dos agendamentos. A tabela completa abre em modal, para não custar altura.
+
+### Dashboard
+
+Períodos de 1h a 7d. Traz execuções, erros, taxa de erro, fluxos ativos e duração mediana e p95; o gráfico de volume ao longo do tempo; e três recortes — **maior volume**, **mais falhas** e **mais lentos (p95)**.
+
+Quando a retenção não cobre o período pedido, um aviso diz quantas horas o banco realmente guarda. Pedir 7 dias não cria histórico que já foi podado, e o painel prefere avisar a desenhar um gráfico enganoso.
+
+O botão **Copiar resumo** gera um relatório em markdown do período inteiro.
+
+### Logs
+
+Busca instantânea por nome do fluxo ou número da execução — o servidor filtra sobre um cache curto, então não há chamada remota a cada tecla. Filtros de status, modo e período aparecem como botões **com o contador do que cada clique vai produzir**.
+
+Clicar numa linha abre o diagnóstico completo daquela execução, com credenciais redigidas e pronto para copiar. `/` foca a busca, `Esc` limpa.
 
 ## Agendamentos: configurado × executou
 
