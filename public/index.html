@@ -20,8 +20,10 @@
   .veredito .icone{font-size:28px;line-height:1;flex:none}
   .veredito .n{font-size:34px;font-weight:680;letter-spacing:-.035em;line-height:1;flex:none}
   .veredito .txt{font-size:15px;font-weight:620;letter-spacing:-.012em;white-space:nowrap}
+  /* flex:1 sozinho não basta: sem min-width:0 o item se recusa a encolher abaixo
+     do conteúdo e empurra o status e o relógio para fora da faixa */
   .veredito .sub{color:var(--ink2);font-size:12.5px;overflow:hidden;
-    text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+    text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 0}
   .veredito.ok{background:color-mix(in oklab,var(--bom) 9%,var(--cartao));
     border-color:color-mix(in oklab,var(--bom) 32%,transparent)}
   .veredito.ok .txt{color:var(--bom)}
@@ -55,7 +57,13 @@
   .prob .titulo{font-size:14px;font-weight:600;width:100%;margin-top:1px;line-height:1.35}
   .prob .det{color:var(--ink2);font-size:12.5px;margin-top:4px}
   .prob .mono{margin-top:7px;max-height:56px;font-size:11.5px;padding:6px 8px;background:var(--cartao)}
-  .prob .acoes{display:flex;gap:8px;margin-top:9px;align-items:center;font-size:12.5px}
+  .prob .acoes{display:flex;gap:8px;margin-top:9px;align-items:center;font-size:12.5px;flex-wrap:wrap}
+  .prob .titulo{overflow-wrap:anywhere}
+  /* em análise: continua na lista, mas para de gritar */
+  .prob.analise{opacity:.62;border-left-color:var(--ink3)}
+  .prob.analise .tipo::after{content:' · em análise';color:var(--ink3)}
+  .resolvidos{font-size:12px;color:var(--ink3);padding:8px 0 2px;border-top:1px solid var(--linha);margin-top:4px}
+  .resolvidos b{color:var(--bom)}
   .vazio .g{font-size:34px;color:var(--bom)}
 
   .exec{display:flex;align-items:center;gap:9px;padding:5px 0;border-top:1px solid var(--linha);font-size:12.5px}
@@ -220,8 +228,21 @@ function juntarProblemas(d, cron){
     mono: l.perdidas?.length ? 'previstos sem execução: ' + l.perdidas.map(hora).join(', ') : null,
     link:`${d.baseUrl}/workflow/${l.workflowId}`,
   })
+  // Reconhecimento: silencia o que JÁ se viu, nunca o que ainda vai acontecer.
+  // Por isso a comparação é com a magnitude do momento em que foi reconhecido —
+  // se o erro voltar a crescer, o alerta reaparece sozinho.
+  const rec = d.reconhecimentos || {}
+  const visiveis = []
+  for (const p of P){
+    const r = rec[p.chave]
+    if (r && (p.magnitude ?? 1) <= (r.magnitude ?? 1)){
+      if (r.estado === 'resolvido') continue          // some da lista
+      if (r.estado === 'analise') p.emAnalise = true  // fica, mas para de gritar
+    }
+    visiveis.push(p)
+  }
   const o = {ruim:0, atencao:1}
-  return P.sort((a,b)=>o[a.nivel]-o[b.nivel])
+  return visiveis.sort((a,b)=> (a.emAnalise?1:0)-(b.emAnalise?1:0) || o[a.nivel]-o[b.nivel])
 }
 
 function pintarVeredito(P, t){
@@ -246,29 +267,45 @@ function pintarVeredito(P, t){
 
 function avisarPorToast(P){
   if (primeiraCarga) return
-  for (const p of P) Toaster.alertar({
+  for (const p of P.filter(x => !x.emAnalise)) Toaster.alertar({
     chave:p.chave, nivel:p.nivel, tipo:p.tipo, titulo:p.titulo,
     det:p.det, magnitude:p.magnitude, link:p.link,
   })
 }
 
-function pintarProblemas(P){
+function rodapeResolvidos(d){
+  const R = d?.resolvidos || []
+  if (!R.length) return ''
+  const nomes = R.slice(0,3).map(g=>esc(g.fluxo)).join(', ')
+  return `<div class="resolvidos">✓ <b>${R.length}</b> resolvido(s) sozinho(s):
+    ${nomes}${R.length>3?` e mais ${R.length-3}`:''} — o fluxo voltou a rodar com sucesso depois do erro.</div>`
+}
+
+function pintarProblemas(P, d){
+  const rodape = rodapeResolvidos(d)
   if (!P.length){
-    $('#problemas').innerHTML = `<div class="vazio"><div class="g">✓</div><div>Nenhum erro, nada travado,<br>agendamentos em dia.</div></div>`
+    $('#problemas').innerHTML =
+      `<div class="vazio"><div class="g">✓</div><div>Nenhum erro, nada travado,<br>agendamentos em dia.</div></div>` + rodape
     return
   }
   $('#problemas').innerHTML = P.map(p=>`
-    <div class="prob ${p.nivel}">
+    <div class="prob ${p.nivel}${p.emAnalise?' analise':''}">
       <div class="cab2"><span class="tipo">${esc(p.tipo)}</span>
         ${p.grande?`<span class="grande"${p.tempoDe?` data-tempo="${esc(p.tempoDe)}"`:''}>${esc(p.grande)}</span>`:''}
-        <div class="titulo">${esc(p.titulo)}</div></div>
+        <div class="titulo" title="${esc(p.titulo)}">${esc(p.titulo)}</div></div>
       <div class="det">${p.det}</div>
       ${p.mono?`<div class="mono">${esc(p.mono)}</div>`:''}
       <div class="acoes">
         ${p.copiarGrupo!=null?`<button data-grupo="${p.copiarGrupo}">Copiar diagnóstico</button>`:''}
+        <button data-rec="resolvido" data-chave="${esc(p.chave)}" data-mag="${p.magnitude??1}"
+          title="some da lista; volta se o problema se repetir">Resolvido</button>
+        ${p.emAnalise
+          ? `<button data-rec="" data-chave="${esc(p.chave)}" data-mag="${p.magnitude??1}">Reativar</button>`
+          : `<button data-rec="analise" data-chave="${esc(p.chave)}" data-mag="${p.magnitude??1}"
+               title="continua na lista, mas para de gerar toast">Em análise</button>`}
         <a href="${esc(p.link)}" target="_blank">abrir no n8n →</a>
       </div>
-    </div>`).join('')
+    </div>`).join('') + rodape
 }
 
 function pintarNums(d, cron){
@@ -392,7 +429,7 @@ async function puxar(){
     ultimo = d
     $('#quando').textContent = horaS(d.momento)
     const P = juntarProblemas(d, ultimoCron)
-    pintarVeredito(P, d.tiles); pintarProblemas(P)
+    pintarVeredito(P, d.tiles); pintarProblemas(P, d)
     pintarNums(d, ultimoCron); pintarAndando(d.rodando, d.limiteTravadaMin)
     grafico(d.serie); tabelaFluxos(d.porFluxo)
     avisarPorToast(P)
@@ -408,7 +445,7 @@ async function puxarCron(recarregar){
     tabelaCron(d); pintarAgResumo(d)
     if (ultimo){
       const P=juntarProblemas(ultimo,d)
-      pintarVeredito(P,ultimo.tiles); pintarProblemas(P); pintarNums(ultimo,d)
+      pintarVeredito(P,ultimo.tiles); pintarProblemas(P,ultimo); pintarNums(ultimo,d)
       avisarPorToast(P)
     }
   } catch {}
@@ -433,6 +470,21 @@ document.addEventListener('click', async ev=>{
   const b = ev.target.closest('[data-grupo]'); if(!b) return
   const g = ultimo?.erros?.[Number(b.dataset.grupo)]; if(!g) return
   b.textContent='…'; await copiar(await dumpDoGrupo(g), b)
+})
+
+// Resolvido / Em análise / Reativar
+document.addEventListener('click', async ev=>{
+  const b = ev.target.closest('[data-rec]'); if(!b) return
+  const estado = b.dataset.rec || null
+  const r = await (await fetch('/api/reconhecer',{method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify({chave:b.dataset.chave, estado, magnitude:Number(b.dataset.mag||1)})})).json()
+  if (r.ok && ultimo){
+    ultimo.reconhecimentos = r.reconhecimentos
+    if (estado === 'resolvido') Toaster.fechar(b.dataset.chave)
+    const P = juntarProblemas(ultimo, ultimoCron)
+    pintarVeredito(P, ultimo.tiles); pintarProblemas(P, ultimo); pintarNums(ultimo, ultimoCron)
+  }
 })
 
 $('#btPausa').onclick = ev=>{
