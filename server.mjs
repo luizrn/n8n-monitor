@@ -22,6 +22,7 @@ const DIR_CONFIG = join(
   'n8n-monitor'
 )
 const ARQ_CONFIG = join(DIR_CONFIG, 'config.json')
+const ARQ_RECON = join(DIR_CONFIG, 'reconhecimentos.json')
 
 const PADRAO = {
   baseUrl: process.env.N8N_BASE_URL || 'http://localhost:5678',
@@ -146,6 +147,32 @@ async function listarRecentes(paginas = 10) {
 
 const ehErro = (s) => s === 'error' || s === 'crashed'
 
+// ------------------------------------------------- reconhecimento de alertas
+//
+// Guardado em disco, não no navegador: marcar algo como "em análise" é
+// informação de equipe, e some se ficar preso a um localStorage.
+//
+// A magnitude no momento do reconhecimento é parte do registro. Assim, se o
+// erro voltar a acontecer, ele reaparece sozinho — reconhecer silencia o que
+// já se viu, não o que ainda vai acontecer.
+let reconhecimentos = {}
+
+async function carregarReconhecimentos() {
+  try { reconhecimentos = JSON.parse(await readFile(ARQ_RECON, 'utf8')) } catch { reconhecimentos = {} }
+}
+async function salvarReconhecimentos() {
+  await mkdir(DIR_CONFIG, { recursive: true })
+  await writeFile(ARQ_RECON, JSON.stringify(reconhecimentos, null, 2))
+}
+function limparReconhecimentosVelhos() {
+  const limite = Date.now() - 7 * 86400000
+  let mudou = false
+  for (const [k, v] of Object.entries(reconhecimentos)) {
+    if (new Date(v.em).getTime() < limite) { delete reconhecimentos[k]; mudou = true }
+  }
+  if (mudou) salvarReconhecimentos().catch(() => {})
+}
+
 function percentil(valores, p) {
   if (!valores.length) return null
   const v = valores.slice().sort((a, b) => a - b)
@@ -177,7 +204,7 @@ async function paginarExecucoes(query, { paginas = 6, ate = null } = {}) {
 // virar UMA linha com contador, nao 200 linhas. O detalhe (no que falhou e
 // mensagem) e buscado so para o mais recente de cada grupo, para nao fazer uma
 // chamada por execucao.
-async function agruparErros(lista) {
+async function agruparErros(lista, todasRecentes = []) {
   const porFluxo = new Map()
   for (const e of lista) {
     const g = porFluxo.get(e.workflowId) || { workflowId: e.workflowId, execs: [] }
@@ -203,11 +230,26 @@ async function agruparErros(lista) {
         mensagem = f?.erro?.message ?? null
       } catch { /* segue sem detalhe */ }
     }
+    // RESOLUÇÃO AUTOMÁTICA: se o mesmo fluxo voltou a rodar DEPOIS deste erro e
+    // deu certo, o problema passou. Alerta que exige alguém lembrar de fechar
+    // vira lixo acumulado na tela; este some sozinho, com a prova do que o
+    // resolveu.
+    const instanteErro = new Date(novo.startedAt).getTime()
+    const sucessoDepois = todasRecentes.find(
+      (e) => e.workflowId === g.workflowId
+        && e.status === 'success'
+        && e.startedAt
+        && new Date(e.startedAt).getTime() > instanteErro
+    )
+
     saida.push({
       workflowId: g.workflowId,
       fluxo: await nomeDeFluxo(g.workflowId),
       no,
       mensagem,
+      resolvidoPor: sucessoDepois
+        ? { id: sucessoDepois.id, quando: sucessoDepois.startedAt }
+        : null,
       total: g.execs.length,
       ids: g.execs.slice(0, 50).map((x) => x.id),
       idExemplo: novo.id,
@@ -250,7 +292,12 @@ async function montarEstado() {
   const errosJanela = (erros.data || []).filter(
     (e) => e.startedAt && agora - new Date(e.startedAt).getTime() <= JANELA_MS
   )
-  const gruposErro = await agruparErros(errosJanela.length ? errosJanela : (erros.data || []).slice(0, 60))
+  const todosGrupos = await agruparErros(
+    errosJanela.length ? errosJanela : (erros.data || []).slice(0, 60),
+    recentes.data || []
+  )
+  const gruposErro = todosGrupos.filter((g) => !g.resolvidoPor)
+  const gruposResolvidos = todosGrupos.filter((g) => g.resolvidoPor)
   const listaRodando = await Promise.all((rodando.data || []).slice(0, 30).map(comNome))
 
   // Execucoes por minuto nos ultimos 60 min, separadas por desfecho.
@@ -299,6 +346,8 @@ async function montarEstado() {
     },
     serie: [...baldes.values()],
     erros: gruposErro,
+    resolvidos: gruposResolvidos,
+    reconhecimentos,
     rodando: listaRodando,
     porFluxo: [...porFluxo.values()].sort((a, b) => b.total - a.total).slice(0, 12),
     limiteTravadaMin: LIMITE_TRAVADA_MIN,
@@ -576,6 +625,20 @@ const servidor = createServer(async (req, res) => {
       }
     }
 
+    if (url.pathname === '/api/reconhecer' && req.method === 'POST') {
+      const c = await lerCorpo(req)
+      if (!c.chave) return json(res, 400, { ok: false, erro: 'falta chave' })
+      if (!c.estado) delete reconhecimentos[c.chave]
+      else reconhecimentos[c.chave] = {
+        estado: c.estado === 'analise' ? 'analise' : 'resolvido',
+        magnitude: Number(c.magnitude ?? 1),
+        em: new Date().toISOString(),
+      }
+      limparReconhecimentosVelhos()
+      await salvarReconhecimentos()
+      return json(res, 200, { ok: true, reconhecimentos })
+    }
+
     // ---------------------------------------------------------- logs
     if (url.pathname === '/api/logs') {
       if (!config.apiKey) return json(res, 200, { ok: false, motivo: 'sem-chave' })
@@ -756,6 +819,8 @@ const servidor = createServer(async (req, res) => {
 })
 
 await carregarConfig()
+await carregarReconhecimentos()
+limparReconhecimentosVelhos()
 servidor.listen(PORTA, '127.0.0.1', () => {
   console.log(`painel n8n em http://127.0.0.1:${PORTA}`)
   console.log(`config: ${ARQ_CONFIG}`)

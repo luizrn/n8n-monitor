@@ -82,6 +82,17 @@ O controle no rodapé ajusta o tempo até fechar, de **5 a 60 segundos**, e fica
 
 Na primeira carga os toasts ficam suprimidos de propósito: os cartões já mostram o estado, e toast deve significar *mudou desde que você está olhando*.
 
+**Alertas se resolvem sozinhos.** Se o fluxo que falhou voltar a rodar com sucesso depois do erro, o alerta some e o rodapé registra `✓ N resolvido(s) sozinho(s)`, nomeando a execução que provou. Alerta que depende de alguém lembrar de fechar vira lixo acumulado na tela.
+
+Quando precisar fechar na mão, cada cartão tem dois botões:
+
+| botão | efeito |
+|---|---|
+| **Resolvido** | some da lista |
+| **Em análise** | continua visível, apagado, sem gerar toast; vira **Reativar** |
+
+O reconhecimento guarda a magnitude do momento em que foi feito. Se o erro voltar a crescer, o alerta **reaparece sozinho** — reconhecer silencia o que você já viu, nunca o que ainda vai acontecer. Fica em `reconhecimentos.json` ao lado da config, não no navegador, porque "em análise" é informação de equipe; expira em 7 dias.
+
 ### Dashboard
 
 Períodos de 1h a 7d. Traz execuções, erros, taxa de erro, fluxos ativos e duração mediana e p95; o gráfico de volume ao longo do tempo; e três recortes — **maior volume**, **mais falhas** e **mais lentos (p95)**.
