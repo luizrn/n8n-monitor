@@ -1,5 +1,7 @@
 # n8n-monitor
 
+<img width="1621" height="760" alt="image" src="https://github.com/user-attachments/assets/c7f639e0-6f10-44f6-8da6-00cf63a49c07" />
+
 Painel de alerta para instâncias n8n. Não é um dashboard de análise: a ideia é bater o olho e saber se tem algo errado.
 
 Responde três perguntas que o n8n não responde bem sozinho:
