@@ -169,9 +169,14 @@
   <div class="obs" id="obsTeste"></div>
 </div></dialog>
 
+<script src="/toasts.js"></script>
 <script>
 const $ = s => document.querySelector(s)
 let ultimo = null, ultimoCron = null, pausado = false
+// Na primeira carga os cartões já mostram tudo; toast deve significar "mudou
+// desde que você está olhando", não "eis o estado". Sem isso, abrir a página
+// com cinco problemas dispararia cinco toasts inúteis.
+let primeiraCarga = true
 
 const nf = n => new Intl.NumberFormat('pt-BR').format(n)
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
@@ -188,6 +193,7 @@ function pintarStatus(nivel, rotulo){ $('#status').className = nivel; $('#status
 function juntarProblemas(d, cron){
   const P = []
   for (const g of d.erros || []) P.push({
+    chave:`erro:${g.workflowId}:${g.no||''}`, magnitude:g.total,
     nivel:'ruim', tipo:'erro de execução',
     resumo:`${g.fluxo}: ${g.total}× erro`, titulo:g.fluxo,
     grande: g.total>1 ? `${nf(g.total)}×` : null,
@@ -197,6 +203,7 @@ function juntarProblemas(d, cron){
     copiarGrupo:(d.erros||[]).indexOf(g),
   })
   for (const e of (d.rodando||[]).filter(x => (x.minutos??0) >= d.limiteTravadaMin)) P.push({
+    chave:`travada:${e.id}`, magnitude:1,
     nivel:'atencao', tipo:'execução travada',
     resumo:`${e.fluxo}: ${dur(e.minutos)} rodando`, titulo:e.fluxo,
     grande:dur(e.minutos), tempoDe:e.inicio,
@@ -204,6 +211,7 @@ function juntarProblemas(d, cron){
     link:`${d.baseUrl}/workflow/${e.workflowId}/executions/${e.id}`,
   })
   for (const l of (cron?.linhas||[]).filter(x => x.veredito==='nunca-executou'||x.veredito==='com-falhas')) P.push({
+    chave:`cron:${l.workflowId}:${l.no}`, magnitude: l.totalPerdidas || 1,
     nivel: l.veredito==='nunca-executou' ? 'ruim' : 'atencao',
     tipo: l.veredito==='nunca-executou' ? 'agendamento não executou' : 'agendamento com falhas',
     resumo:`${l.fluxo}: ${l.totalPerdidas} perdida(s)`,
@@ -234,6 +242,14 @@ function pintarVeredito(P, t){
   $('#heroN').hidden=false; $('#heroN').textContent = n
   $('#heroTxt').textContent = n===1 ? 'precisa de atenção' : 'precisam de atenção'
   $('#heroSub').textContent = P.map(p=>p.resumo).join('  ·  ')
+}
+
+function avisarPorToast(P){
+  if (primeiraCarga) return
+  for (const p of P) Toaster.alertar({
+    chave:p.chave, nivel:p.nivel, tipo:p.tipo, titulo:p.titulo,
+    det:p.det, magnitude:p.magnitude, link:p.link,
+  })
 }
 
 function pintarProblemas(P){
@@ -379,6 +395,8 @@ async function puxar(){
     pintarVeredito(P, d.tiles); pintarProblemas(P)
     pintarNums(d, ultimoCron); pintarAndando(d.rodando, d.limiteTravadaMin)
     grafico(d.serie); tabelaFluxos(d.porFluxo)
+    avisarPorToast(P)
+    primeiraCarga = false
   } catch { pintarStatus('ruim','painel offline'); $('#quando').textContent='' }
 }
 
@@ -388,7 +406,11 @@ async function puxarCron(recarregar){
     if (!d.ok) return
     ultimoCron = d
     tabelaCron(d); pintarAgResumo(d)
-    if (ultimo){ const P=juntarProblemas(ultimo,d); pintarVeredito(P,ultimo.tiles); pintarProblemas(P); pintarNums(ultimo,d) }
+    if (ultimo){
+      const P=juntarProblemas(ultimo,d)
+      pintarVeredito(P,ultimo.tiles); pintarProblemas(P); pintarNums(ultimo,d)
+      avisarPorToast(P)
+    }
   } catch {}
 }
 

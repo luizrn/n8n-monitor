@@ -110,6 +110,53 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 .dlg{padding:18px;overflow:auto;max-height:calc(100vh - 96px)}
 .dlg h3{margin:0 0 4px;font-size:15px}
 .obs{font-size:11px;color:var(--ink3);margin-top:5px;line-height:1.45}
+/* ---------- toasts ---------- */
+.toasts{position:fixed;right:14px;bottom:14px;z-index:60;
+  display:flex;flex-direction:column-reverse;gap:8px;align-items:flex-end;
+  max-width:min(420px,calc(100vw - 28px));pointer-events:none}
+.toasts>*{pointer-events:auto}
+
+.toast{position:relative;width:100%;background:var(--cartao);
+  border:1px solid var(--linha);border-left:4px solid var(--ink3);
+  border-radius:11px;padding:11px 13px 13px;overflow:hidden;
+  box-shadow:0 6px 22px rgba(0,0,0,.16);animation:entra .22s cubic-bezier(.2,.8,.3,1)}
+.toast.ruim{border-left-color:var(--ruim)}
+.toast.atencao{border-left-color:var(--atencao)}
+.toast.saindo{animation:sai .2s ease-in forwards}
+@keyframes entra{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes sai{to{opacity:0;transform:translateX(14px)}}
+@keyframes bateu{0%{transform:none}30%{transform:scale(1.025)}100%{transform:none}}
+.toast.pulsou{animation:bateu .32s ease-out}
+
+.toast .lin1{display:flex;align-items:center;gap:8px}
+.toast .tipo{font-size:9.5px;font-weight:680;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.toast.ruim .tipo{color:var(--ruim)} .toast.atencao .tipo{color:var(--atencao)}
+.toast .vezes{font-size:11px;font-weight:680;font-variant-numeric:tabular-nums;
+  padding:1px 6px;border-radius:20px;border:1px solid var(--linha);color:var(--ink2)}
+.toast.ruim .vezes{color:var(--ruim);border-color:color-mix(in oklab,var(--ruim) 45%,transparent)}
+.toast.atencao .vezes{color:var(--atencao);border-color:color-mix(in oklab,var(--atencao) 45%,transparent)}
+.toast .x{margin-left:auto;border:none;background:none;color:var(--ink3);
+  font-size:15px;line-height:1;padding:0 2px;cursor:pointer}
+.toast .x:hover{color:var(--ink)}
+.toast .tit{font-size:13px;font-weight:600;margin-top:3px;line-height:1.35}
+.toast .det{font-size:12px;color:var(--ink2);margin-top:3px}
+.toast .det a{font-size:12px}
+.toast .prog{position:absolute;left:0;bottom:0;height:2px;width:100%;
+  background:var(--ink3);opacity:.5;transform-origin:left;animation:escoa linear forwards}
+.toast.ruim .prog{background:var(--ruim)} .toast.atencao .prog{background:var(--atencao)}
+@keyframes escoa{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+
+.toast-ctrl{display:flex;align-items:center;gap:8px;background:var(--cartao);
+  border:1px solid var(--linha);border-radius:999px;padding:5px 12px;
+  font-size:11px;color:var(--ink3);opacity:.55;transition:opacity .15s}
+.toast-ctrl:hover{opacity:1}
+.toast-ctrl input[type=range]{width:92px;accent-color:var(--calmo);padding:0;border:none;background:none}
+.toast-ctrl b{color:var(--ink2);font-variant-numeric:tabular-nums;min-width:30px}
+.toast-ctrl button{padding:2px 8px;font-size:11px}
+@media (prefers-reduced-motion: reduce){
+  .toast,.toast.pulsou{animation:none}
+}
+
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
   color:var(--ink2);background:var(--sup);border:1px solid var(--linha);border-radius:6px;
   padding:9px 11px;white-space:pre-wrap;word-break:break-word;overflow:auto}
