@@ -37,6 +37,7 @@ window.I18n = (() => {
     'Sem dados do n8n.': 'No n8n data.', 'Abrir no n8n →': 'Open in n8n →',
     'não foi possível montar o diagnóstico: ': 'could not build diagnostics: ',
     'Geral': 'General', 'Idioma': 'Language', 'Português (Brasil)': 'Portuguese (Brazil)', 'Inglês': 'English', 'Documentação': 'Documentation',
+    'Envio de alertas': 'Alert delivery',
     'Instâncias n8n': 'n8n instances', 'Notificações': 'Notifications', 'Adicionar instância': 'Add instance',
     'Fechar toast automaticamente': 'Close toast automatically', 'Notificações do navegador': 'Browser notifications',
     'Som em alertas vermelhos': 'Sound for red alerts', 'Volume': 'Volume', 'manual': 'manual',

@@ -72,7 +72,7 @@ As cinco abas ficam no Monitor:
 - **Instâncias n8n:** nome, URL, API key, ativação e teste individual.
 - **Notificações:** duração do toast de 0 a 600 segundos, navegador, som e volume.
 - **Uptime Kuma:** URL, API key, slug público opcional, antecedência e seleção de monitores.
-- **Webhook:** lista de destinos Webhook HTTP, WhatsApp/Evolution API e Discord, cada um com nome, ativação, credenciais, teste e último resultado próprios. Vários destinos podem operar simultaneamente. O modo HTTP aceita `POST`, `PUT` ou `PATCH`, Bearer e um header adicional opcional.
+- **Envio de alertas:** lista de destinos Webhook HTTP, WhatsApp/Evolution API e Discord, cada um com nome, ativação, credenciais, teste e último resultado próprios. Vários destinos podem operar simultaneamente. O modo HTTP aceita `POST`, `PUT` ou `PATCH`, Bearer e um header adicional opcional.
 
 Campos secretos sempre chegam vazios ao navegador. Deixá-los vazios ao salvar preserva o valor atual.
 
