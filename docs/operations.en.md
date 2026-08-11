@@ -54,6 +54,10 @@ Audio requires a user gesture. Select **Test** after opening Settings. Sound pla
 
 In **Settings > General**, select **Portuguese (Brazil)** or **English**. The value is persisted in `config.json`, returned by `GET /api/config`, and applied to Monitor, Settings, Tasks, Dashboard, Logs, dialogs, toasts, and system notifications. Dates and numbers use the matching locale. The preference is mirrored in `localStorage` to prevent a language flash during navigation.
 
+## Theme
+
+In **Settings > General**, choose **Dark** or **Light**. Dark is the default and preserves the original visual identity; Light uses a low-glare cool gray surface. The value is persisted in `config.json` and mirrored in `localStorage`. `public/theme.js` applies it before CSS across Monitor, Tasks, Dashboard, and Logs.
+
 ## External channels
 
 In **Settings > Alert delivery**, add one or more destinations. Every item has an independent name, mode, switch, credentials, test button, and latest result. Active destinations receive the same event lifecycle simultaneously. Disabling one destination does not affect the others; enabling it again sends currently open alerts once.

@@ -44,7 +44,7 @@ O diretório é `N8N_MONITOR_DATA_DIR`, `%LOCALAPPDATA%\n8n-monitor` ou `$HOME/n
 
 | Arquivo | Conteúdo |
 |---|---|
-| `config.json` | idioma, instâncias e credenciais, notificações, Kuma e webhook |
+| `config.json` | idioma, tema, instâncias e credenciais, notificações, Kuma e webhook |
 | `reconhecimentos.json` | magnitude reconhecida por alerta |
 | `tarefas.json` | tarefas e histórico de transições |
 | `webhook-estado.json` | assinaturas entregues e último resultado por destino externo |

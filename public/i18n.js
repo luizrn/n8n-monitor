@@ -73,6 +73,7 @@ window.I18n = (() => {
     'Não foi possível carregar os monitores.': 'Could not load monitors.',
     'Configure URL e API key para listar os monitores.': 'Configure the URL and API key to list monitors.',
     'Dados protegidos em': 'Protected data at', 'Nome': 'Name', 'Remover': 'Remove',
+    'Tema': 'Theme', 'Escuro': 'Dark', 'Claro': 'Light',
     'serviço offline': 'service offline', 'status desconhecido': 'unknown status',
     'instância offline': 'instance offline', 'erro de execução': 'execution error', 'execução travada': 'stuck execution',
     'agendamento não executou': 'schedule did not run', 'agendamento com falhas': 'schedule failures',

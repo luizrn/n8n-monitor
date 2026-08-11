@@ -42,7 +42,7 @@ The data directory is selected through `N8N_MONITOR_DATA_DIR`, `%LOCALAPPDATA%\n
 
 | File | Contents |
 |---|---|
-| `config.json` | language, instances and credentials, notifications, Kuma, and external destinations |
+| `config.json` | language, theme, instances and credentials, notifications, Kuma, and external destinations |
 | `reconhecimentos.json` | acknowledged magnitude per alert |
 | `tarefas.json` | tasks and transition history |
 | `webhook-estado.json` | delivered signatures and latest result per external destination |

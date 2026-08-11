@@ -2,20 +2,20 @@
    Desenvolvido por Luiz Fernando Riva Nekel */
 
 :root{
-  --sup:#fbfbfc; --cartao:#ffffff; --linha:#e4e7ea;
-  --ink:#101316; --ink2:#4d545b; --ink3:#828b93;
-  --calmo:#2f6fd0; --bom:#2c7a52; --atencao:#a06507; --ruim:#c0392b;
-  --pontoBom:#28a862; --pontoAtencao:#f2c014; --pontoRuim:#e0402c;
-  --grid:#eaedf0; --scroll-track:#f1f3f5; --scroll-thumb:#aab1b8; --scroll-hover:#7f8992;
+  color-scheme:dark;
+  --sup:#0e1114; --cartao:#171b1f; --linha:#282e34;
+  --ink:#eef0f2; --ink2:#a9b1b9; --ink3:#79828b;
+  --calmo:#6fa8f5; --bom:#5cbd8a; --atencao:#e8bc4e; --ruim:#f0745c;
+  --pontoBom:#43c98a; --pontoAtencao:#f5cf3d; --pontoRuim:#f4614a;
+  --grid:#232930; --scroll-track:#111519; --scroll-thumb:#4b555e; --scroll-hover:#68747e;
 }
-@media (prefers-color-scheme: dark){
-  :root{
-    --sup:#0e1114; --cartao:#171b1f; --linha:#282e34;
-    --ink:#eef0f2; --ink2:#a9b1b9; --ink3:#79828b;
-    --calmo:#6fa8f5; --bom:#5cbd8a; --atencao:#e8bc4e; --ruim:#f0745c;
-    --pontoBom:#43c98a; --pontoAtencao:#f5cf3d; --pontoRuim:#f4614a;
-    --grid:#232930; --scroll-track:#111519; --scroll-thumb:#4b555e; --scroll-hover:#68747e;
-  }
+html[data-theme="claro"]{
+  color-scheme:light;
+  --sup:#e9eef1; --cartao:#f7f9fa; --linha:#cfd8dd;
+  --ink:#172027; --ink2:#53616b; --ink3:#74828c;
+  --calmo:#2869b6; --bom:#287a54; --atencao:#946307; --ruim:#bd4337;
+  --pontoBom:#289d67; --pontoAtencao:#d7a90a; --pontoRuim:#d94b3d;
+  --grid:#e1e7ea; --scroll-track:#dce4e8; --scroll-thumb:#9aa8b1; --scroll-hover:#748590;
 }
 
 *{box-sizing:border-box;scrollbar-width:thin;scrollbar-color:var(--scroll-thumb) var(--scroll-track)}

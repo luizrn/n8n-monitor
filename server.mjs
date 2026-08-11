@@ -74,6 +74,7 @@ const PADRAO = {
   instancias: [],
   ativo: true,
   idioma: 'pt-BR',
+  tema: 'escuro',
   fuso: 'America/Cuiaba',   // usado quando o workflow nao define timezone proprio
   horasCron: 24,            // janela da conferencia configurado-vs-executou
   toleranciaMin: 5,         // atraso aceito antes de considerar ocorrencia perdida
@@ -181,6 +182,7 @@ function idsUnicos(itens) {
 function migrar(cru) {
   const c = { ...PADRAO, ...cru }
   if (!['pt-BR', 'en'].includes(c.idioma)) c.idioma = 'pt-BR'
+  if (!['escuro', 'claro'].includes(c.tema)) c.tema = 'escuro'
   c.notificacoes = { ...NOTIF_PADRAO, ...(cru?.notificacoes || {}) }
   c.uptimeKuma = { ...UPTIME_PADRAO, ...(cru?.uptimeKuma || {}) }
   c.horasCron = numeroLimitado(c.horasCron, 1, 168, PADRAO.horasCron)
@@ -860,6 +862,7 @@ const servidor = createServer(async (req, res) => {
         instancias: config.instancias.map(publica),
         ativo: config.ativo,
         idioma: config.idioma,
+        tema: config.tema,
         armazenamento: 'privado',
         notificacoes: config.notificacoes,
         uptimeKuma: {
@@ -896,6 +899,7 @@ const servidor = createServer(async (req, res) => {
 
       if (typeof corpo.ativo === 'boolean') config.ativo = corpo.ativo
       if (['pt-BR', 'en'].includes(corpo.idioma)) config.idioma = corpo.idioma
+      if (['escuro', 'claro'].includes(corpo.tema)) config.tema = corpo.tema
 
       if (corpo.notificacoes && typeof corpo.notificacoes === 'object') {
         const n = corpo.notificacoes

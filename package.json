@@ -11,7 +11,7 @@
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test",
-    "check": "node --check server.mjs && node --check cron.mjs && node --check instancias.mjs && node --check tarefas.mjs && node --check uptime.mjs && node --check alertas.mjs && node --check rdap.mjs && node --check webhook.mjs && node --check seguranca.mjs && node --check scripts/diag-exec.mjs && node --check scripts/dump-wf.mjs && node --check public/i18n.js && node --check public/toasts.js",
+    "check": "node --check server.mjs && node --check cron.mjs && node --check instancias.mjs && node --check tarefas.mjs && node --check uptime.mjs && node --check alertas.mjs && node --check rdap.mjs && node --check webhook.mjs && node --check seguranca.mjs && node --check scripts/diag-exec.mjs && node --check scripts/dump-wf.mjs && node --check public/theme.js && node --check public/i18n.js && node --check public/toasts.js",
     "diag": "node scripts/diag-exec.mjs",
     "dump": "node scripts/dump-wf.mjs"
   },
