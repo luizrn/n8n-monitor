@@ -23,7 +23,7 @@ Node.js puro, sem dependências npm, framework ou etapa de build.
 | 🔎 | Logs | Busca e filtros por status, modo, período e instância, com diagnóstico redigido. |
 | 🔔 | Notificação do navegador | Avisa mudanças amarelas e vermelhas quando o Monitor está aberto em segundo plano. |
 | 🔊 | Som | Toca apenas em alerta vermelho, com volume, teste e cooldown anti-spam. |
-| 🪝 | Webhook | Envia abertura, agravamento e resolução em JSON, mesmo sem navegador aberto. |
+| 🪝 | Canais externos | Envia abertura, agravamento e resolução por webhook HTTP, WhatsApp/Evolution API ou Discord. |
 | 🟢 | Uptime Kuma | Exibe status, resposta, uptime, manutenção, pausa e monitores selecionáveis. |
 | 🔐 | TLS | Avisa certificado próximo do vencimento, expirado ou inválido. |
 | 🌐 | Domínios | Consulta expiração por RDAP e ignora TLDs sem fonte confiável. |
@@ -66,7 +66,7 @@ As quatro abas ficam no Monitor:
 - **Instâncias n8n:** nome, URL, API key, ativação e teste individual.
 - **Notificações:** duração do toast de 0 a 600 segundos, navegador, som e volume.
 - **Uptime Kuma:** URL, API key, slug público opcional, antecedência e seleção de monitores.
-- **Webhook:** URL, Bearer opcional, ativação e envio de teste.
+- **Webhook:** modo Webhook HTTP, WhatsApp/Evolution API ou Discord, com ativação e envio de teste. O modo HTTP aceita `POST`, `PUT` ou `PATCH`, Bearer e um header adicional opcional.
 
 Campos secretos sempre chegam vazios ao navegador. Deixá-los vazios ao salvar preserva o valor atual.
 

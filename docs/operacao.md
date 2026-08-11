@@ -46,11 +46,17 @@ A permissão do navegador é pedida ao ativar a opção. Se ela foi negada perma
 
 Áudio precisa de gesto do usuário; use **Testar** depois de abrir Configurações. O som toca somente para vermelho e respeita cooldown.
 
-## Webhook
+## Canais externos
 
-O destino deve aceitar `POST` JSON e responder 2xx em até 10 segundos. Bearer é opcional. Use o teste antes de ativar.
+Em **Configurações > Webhook**, escolha um modo:
 
-Em falha, confira **Configurações > Webhook**, logs do processo, DNS, certificado do destino e regras de proxy/firewall. O estado persistido impede reenvio de eventos já aceitos.
+- **Webhook HTTP:** informe URL e método (`POST`, `PUT` ou `PATCH`). Bearer e um par nome/valor de header são opcionais.
+- **WhatsApp (Evolution API):** informe URL base, nome da instância, API key e número com país e DDD. O painel usa o endpoint oficial `/message/sendText/{instanceName}`.
+- **Discord:** informe a URL de webhook do canal e, opcionalmente, o nome exibido.
+
+Use **Enviar teste** antes de ativar. O destino deve responder HTTP 2xx em até 10 segundos.
+
+Em falha, confira o último resultado na própria aba, logs do processo, DNS, certificado do destino e regras de proxy/firewall. Campos secretos vazios mantêm o valor salvo. O estado persistido impede reenvio de eventos já aceitos.
 
 ## Backup
 

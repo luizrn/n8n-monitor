@@ -51,8 +51,18 @@ const UPTIME_PADRAO = {
 
 const WEBHOOK_PADRAO = {
   ativo: false,
+  modo: 'webhook',
   url: '',
+  metodo: 'POST',
   bearer: '',
+  headerNome: '',
+  headerValor: '',
+  evolutionUrl: '',
+  evolutionInstancia: '',
+  evolutionApiKey: '',
+  evolutionNumero: '',
+  discordUrl: '',
+  discordNome: 'n8n-monitor',
 }
 
 const PADRAO = {
@@ -105,6 +115,8 @@ function migrar(cru) {
   c.notificacoes = { ...NOTIF_PADRAO, ...(cru?.notificacoes || {}) }
   c.uptimeKuma = { ...UPTIME_PADRAO, ...(cru?.uptimeKuma || {}) }
   c.webhook = { ...WEBHOOK_PADRAO, ...(cru?.webhook || {}) }
+  if (!['webhook', 'evolution', 'discord'].includes(c.webhook.modo)) c.webhook.modo = 'webhook'
+  if (!['POST', 'PUT', 'PATCH'].includes(c.webhook.metodo)) c.webhook.metodo = 'POST'
 
   if (!Array.isArray(c.instancias) || !c.instancias.length) {
     const url = String(cru?.baseUrl || process.env.N8N_BASE_URL || '').trim()
@@ -769,8 +781,18 @@ const servidor = createServer(async (req, res) => {
           avisarCertDias: uk.avisarCertDias,
         },
         webhook: {
-          ativo: config.webhook.ativo, url: config.webhook.url,
-          temBearer: Boolean(config.webhook.bearer), ultimo: webhook.status(),
+          ativo: config.webhook.ativo, modo: config.webhook.modo,
+          url: config.webhook.url, metodo: config.webhook.metodo,
+          temBearer: Boolean(config.webhook.bearer),
+          headerNome: config.webhook.headerNome,
+          temHeaderValor: Boolean(config.webhook.headerValor),
+          evolutionUrl: config.webhook.evolutionUrl,
+          evolutionInstancia: config.webhook.evolutionInstancia,
+          evolutionNumero: config.webhook.evolutionNumero,
+          temEvolutionApiKey: Boolean(config.webhook.evolutionApiKey),
+          temDiscordUrl: Boolean(config.webhook.discordUrl),
+          discordNome: config.webhook.discordNome,
+          ultimo: webhook.status(),
         },
       })
     }
@@ -828,8 +850,18 @@ const servidor = createServer(async (req, res) => {
         const atual = config.webhook
         config.webhook = {
           ativo: typeof w.ativo === 'boolean' ? w.ativo : atual.ativo,
+          modo: ['webhook', 'evolution', 'discord'].includes(w.modo) ? w.modo : atual.modo,
           url: typeof w.url === 'string' ? w.url.trim() : atual.url,
+          metodo: ['POST', 'PUT', 'PATCH'].includes(w.metodo) ? w.metodo : atual.metodo,
           bearer: typeof w.bearer === 'string' && w.bearer.trim() ? w.bearer.trim() : atual.bearer,
+          headerNome: typeof w.headerNome === 'string' ? w.headerNome.trim() : atual.headerNome,
+          headerValor: typeof w.headerValor === 'string' && w.headerValor.trim() ? w.headerValor.trim() : atual.headerValor,
+          evolutionUrl: typeof w.evolutionUrl === 'string' ? w.evolutionUrl.trim().replace(/\/+$/, '') : atual.evolutionUrl,
+          evolutionInstancia: typeof w.evolutionInstancia === 'string' ? w.evolutionInstancia.trim() : atual.evolutionInstancia,
+          evolutionApiKey: typeof w.evolutionApiKey === 'string' && w.evolutionApiKey.trim() ? w.evolutionApiKey.trim() : atual.evolutionApiKey,
+          evolutionNumero: typeof w.evolutionNumero === 'string' ? w.evolutionNumero.replace(/\D/g, '') : atual.evolutionNumero,
+          discordUrl: typeof w.discordUrl === 'string' && w.discordUrl.trim() ? w.discordUrl.trim() : atual.discordUrl,
+          discordNome: typeof w.discordNome === 'string' ? w.discordNome.trim().slice(0, 80) : atual.discordNome,
         }
       }
 
@@ -887,8 +919,19 @@ const servidor = createServer(async (req, res) => {
     if (url.pathname === '/api/webhook/teste' && req.method === 'POST') {
       const c = await lerCorpo(req)
       const cfg = {
+        ...config.webhook,
+        modo: ['webhook', 'evolution', 'discord'].includes(c.modo) ? c.modo : config.webhook.modo,
         url: String(c.url || config.webhook.url || '').trim(),
+        metodo: ['POST', 'PUT', 'PATCH'].includes(c.metodo) ? c.metodo : config.webhook.metodo,
         bearer: String(c.bearer || '').trim() || config.webhook.bearer,
+        headerNome: String(c.headerNome ?? config.webhook.headerNome ?? '').trim(),
+        headerValor: String(c.headerValor || '').trim() || config.webhook.headerValor,
+        evolutionUrl: String(c.evolutionUrl || config.webhook.evolutionUrl || '').trim().replace(/\/+$/, ''),
+        evolutionInstancia: String(c.evolutionInstancia || config.webhook.evolutionInstancia || '').trim(),
+        evolutionApiKey: String(c.evolutionApiKey || '').trim() || config.webhook.evolutionApiKey,
+        evolutionNumero: String(c.evolutionNumero || config.webhook.evolutionNumero || '').replace(/\D/g, ''),
+        discordUrl: String(c.discordUrl || '').trim() || config.webhook.discordUrl,
+        discordNome: String(c.discordNome ?? config.webhook.discordNome ?? 'n8n-monitor').trim().slice(0, 80),
       }
       return json(res, 200, await webhook.testar(cfg))
     }
