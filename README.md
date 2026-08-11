@@ -20,11 +20,11 @@ Node.js puro, sem dependências npm, framework ou etapa de build.
 | 🚨 | Alertas agrupados | Agrupa falhas repetidas por instância, workflow e nó, preservando magnitude e diagnóstico. |
 | ⏱️ | Execuções travadas | Cronômetro ao vivo e alerta amarelo após 30 minutos. |
 | 📅 | Auditoria de agendamentos | Compara Schedule Trigger, Cron e Interval com as execuções realmente retidas pelo n8n. |
-| 🏷️ | Múltiplas instâncias | Configuração, cache, links, tags e filtros isolados por instância n8n. |
+| 🏷️ | Múltiplas instâncias | Configuração, cache, links, tags e filtros isolados por instância n8n, com resumo das conexões ativas. |
 | ✅ | Resolução automática | Remove o alerta quando uma execução posterior comprova recuperação. |
 | 📋 | Tarefas | Move alertas para Lista ou Kanban com seis estados, notas e histórico. |
 | 📊 | Dashboard | Volume, falhas, taxa de erro, mediana e p95 para períodos de até sete dias. |
-| 🔎 | Logs | Busca e filtros por status, modo, período e instância, com diagnóstico redigido. |
+| 🔎 | Logs | Busca e filtros por status, modo, período e instância, com diagnóstico redigido e acesso pelo botão Detalhes do bloco N8N. |
 | 🔔 | Notificação do navegador | Avisa mudanças amarelas e vermelhas quando o Monitor está aberto em segundo plano. |
 | 🔊 | Som | Toca apenas em alerta vermelho, com volume, teste e cooldown anti-spam. |
 | 🪝 | Canais externos | Envia abertura, agravamento e resolução simultaneamente para múltiplos Webhooks HTTP, WhatsApp/Evolution API e Discord. |
@@ -73,6 +73,8 @@ As cinco abas ficam no Monitor:
 - **Notificações:** duração do toast de 0 a 600 segundos, navegador, som e volume.
 - **Uptime Kuma:** URL, API key, slug público opcional, antecedência e seleção de monitores.
 - **Envio de alertas:** lista de destinos Webhook HTTP, WhatsApp/Evolution API e Discord, cada um com nome, ativação, credenciais, teste e último resultado próprios. Vários destinos podem operar simultaneamente. O modo HTTP aceita `POST`, `PUT` ou `PATCH`, Bearer e um header adicional opcional.
+
+A aba **Envio de alertas** começa vazia e só cria um formulário ao clicar em **Adicionar destino**. O atalho **Documentação** abre os guias públicos do projeto no GitHub.
 
 Campos secretos sempre chegam vazios ao navegador. Deixá-los vazios ao salvar preserva o valor atual.
 

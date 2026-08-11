@@ -1,5 +1,7 @@
 # Changelog
 
+> **English version:** [Changelog](CHANGELOG.en.md)
+
 Todas as mudanças relevantes serão registradas aqui. O projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e adotará versionamento semântico a partir da primeira tag.
 
 ## Unreleased
@@ -12,5 +14,7 @@ Todas as mudanças relevantes serão registradas aqui. O projeto segue [Keep a C
 - notificações do navegador, som e canais contínuos por webhook HTTP, WhatsApp/Evolution API ou Discord;
 - múltiplos destinos externos simultâneos, com ativação, teste, resultado e deduplicação independentes;
 - interface completa em Português (Brasil) e inglês, selecionável em Configurações;
+- documentação técnica e comunitária completa em Português (Brasil) e inglês;
+- resumo de conexões n8n/Kuma no estado vazio e acesso direto do bloco N8N aos Logs;
 - Docker, Compose e testes automatizados locais;
 - documentação e arquivos comunitários para o projeto open source.

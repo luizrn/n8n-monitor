@@ -1,5 +1,7 @@
 # Suporte
 
+> **English version:** [Support](SUPPORT.en.md)
+
 - Dúvidas de uso e operação: use as [Discussões](https://github.com/luizrn/n8n-monitor/discussions).
 - Bugs reproduzíveis: abra uma [issue](https://github.com/luizrn/n8n-monitor/issues/new/choose).
 - Vulnerabilidades: siga [SECURITY.md](SECURITY.md) e não publique detalhes em issues.
