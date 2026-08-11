@@ -6,8 +6,9 @@
 <title>Monitor n8n</title>
 <link rel="stylesheet" href="/base.css">
 <style>
-body{overflow:hidden}.app{width:100%;min-width:0;height:100vh;max-width:1720px;margin:auto;padding:12px;display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:10px}
+body{overflow:hidden}.app{width:98%;min-width:0;height:100vh;max-width:none;margin:auto;padding:12px;display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:10px}
 .app>*{min-width:0}.topo{display:flex;align-items:center;gap:12px;min-width:0;padding:10px 14px;border:1px solid var(--linha);border-radius:10px;background:var(--cartao)}
+.topo-acoes{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex:none;min-width:0}
 .placar{display:flex;align-items:center;gap:10px;min-width:0;flex:1}.placar .icone{font-size:28px}.placar .numero{font-size:30px;font-weight:700}.placar .titulo{font-weight:650}.placar .resumo{width:clamp(180px,28vw,520px);flex:none;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .topo.ruim{border-color:color-mix(in oklab,var(--ruim) 55%,var(--linha));background:color-mix(in oklab,var(--ruim) 8%,var(--cartao))}.topo.atencao{border-color:color-mix(in oklab,var(--atencao) 55%,var(--linha));background:color-mix(in oklab,var(--atencao) 8%,var(--cartao))}
 .filtros-inst{display:flex;align-items:center;gap:6px;min-height:28px}.filtros-inst .rot{font-size:10px;text-transform:uppercase;color:var(--ink3);letter-spacing:.08em}
@@ -26,7 +27,7 @@ body{overflow:hidden}.app{width:100%;min-width:0;height:100vh;max-width:1720px;m
 .destinos-lista{display:grid;gap:10px;margin:10px 0}.destino-config{border:1px solid var(--linha);border-radius:8px;padding:12px;background:var(--sup)}.destino-top{display:grid;grid-template-columns:auto minmax(130px,1fr) minmax(170px,.65fr) auto;gap:8px;align-items:center}.destino-ativo{display:flex;align-items:center;margin:0}.destino-top input,.destino-top select{width:100%}.destino-top input.toggle{width:40px;min-width:40px}.destino-status{font-size:11px;color:var(--ink3)}.canal-campos{display:grid;grid-template-columns:1fr 1fr;column-gap:12px}.canal-campos .campo-largo{grid-column:1/-1}.canal-campos input,.canal-campos select{width:100%}.canal-campos[hidden]{display:none}
 .modal-table td,.modal-table th{padding:8px}.estado{display:inline-flex;align-items:center;gap:6px}.dot{width:8px;height:8px;border-radius:50%;background:var(--ink3)}.dot.ligado{background:var(--pontoBom)}.dot.desligado{background:var(--pontoRuim)}.dot.desconhecido{background:var(--pontoAtencao)}
 @media(max-width:1050px){body{overflow:auto}.app{height:auto}.grade{grid-template-columns:1fr}.lateral{grid-template-rows:auto auto minmax(180px,260px) auto}.inst-row{grid-template-columns:auto 1fr}.inst-row input{grid-column:2}.uptime-resumo{grid-template-columns:repeat(5,minmax(65px,1fr))}}
-@media(max-width:700px){.topo{flex-wrap:wrap}.topo .nav{flex:1 0 100%;justify-content:space-between;overflow-x:auto}.placar{flex:1 0 100%}.placar .resumo{display:none}.topo .meta{margin-left:auto}.tabs{overflow-x:auto}.tabs button{white-space:nowrap}.destino-top{grid-template-columns:auto 1fr auto}.destino-top select{grid-column:2}.canal-campos{grid-template-columns:1fr}.canal-campos .campo-largo{grid-column:auto}}
+@media(max-width:700px){.topo{flex-wrap:wrap}.topo .nav{flex:1 0 100%;justify-content:space-between;overflow-x:auto}.placar{flex:1 0 100%}.placar .resumo{display:none}.topo-acoes{flex:1 0 100%;gap:8px;flex-wrap:wrap}.tabs{overflow-x:auto}.tabs button{white-space:nowrap}.destino-top{grid-template-columns:auto 1fr auto}.destino-top select{grid-column:2}.canal-campos{grid-template-columns:1fr}.canal-campos .campo-largo{grid-column:auto}}
 </style>
 </head>
 <body>
@@ -34,8 +35,10 @@ body{overflow:hidden}.app{width:100%;min-width:0;height:100vh;max-width:1720px;m
   <header class="topo" id="topo">
     <nav class="nav"><a class="atual" href="/">Monitor</a><a href="/tarefas">Tarefas <span id="tarefasN"></span></a><a href="/dashboard">Dashboard</a><a href="/logs">Logs</a></nav>
     <div class="placar"><span class="icone" id="icone">…</span><span class="numero" id="numero"></span><span class="titulo" id="titulo">carregando</span><span class="resumo" id="resumo"></span></div>
-    <span id="status"><span class="ponto"></span><span id="statusNome">conectando</span></span>
-    <span class="meta" id="quando"></span><button id="btPausa">Pausar</button><button id="btConfig">Configurações</button>
+    <div class="topo-acoes">
+      <span id="status"><span class="ponto"></span><span id="statusNome">conectando</span></span>
+      <span class="meta" id="quando"></span><button id="btPausa">Pausar</button><button id="btConfig">Configurações</button>
+    </div>
   </header>
   <div class="filtros-inst" id="fInst"></div>
   <section class="grade">
