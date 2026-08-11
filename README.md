@@ -94,9 +94,9 @@ Dados ficam em `%LOCALAPPDATA%\n8n-monitor` no Windows, `$HOME/n8n-monitor` em o
 
 ## Semântica dos alertas
 
-Cada problema possui uma chave estável. Uma consulta igual permanece em silêncio; magnitude maior gera agravamento. **Em análise** move o item para Tarefas e o remove do Monitor. **Resolvido** reconhece a magnitude atual. Quando a fonte realmente se recupera, o reconhecimento é limpo e uma recorrência futura volta a aparecer.
+Cada problema possui uma chave estável. Toast, notificação do navegador e som são emitidos uma única vez enquanto essa chave estiver ativa, mesmo que a magnitude aumente ou a página seja recarregada. Quando o problema desaparece, a chave é liberada e uma recorrência futura pode avisar novamente. **Em análise** move o item para Tarefas e o remove do Monitor; **Resolvido** reconhece a magnitude atual.
 
-O webhook usa a mesma máquina de estados e envia `opened`, `worsened` e `resolved`. Consulte [docs/arquitetura.md](docs/arquitetura.md) para o schema.
+O webhook mantém uma máquina de estados própria e envia `opened`, `worsened` e `resolved`. Consulte [docs/arquitetura.md](docs/arquitetura.md) para o schema.
 
 ## Desenvolvimento
 

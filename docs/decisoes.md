@@ -10,16 +10,18 @@ Uma instância offline também não produz zeros: ela gera alerta vermelho com n
 
 Workflow e execução podem repetir IDs em servidores diferentes. Chaves, caches, diagnósticos e links incluem `instanciaId`; fluxos homônimos permanecem separados.
 
-## Anti-spam por mudança
+## Anti-spam por ciclo do problema
 
-Polling não é evento. Toast, navegador, som e webhook atravessam o mesmo portão:
+Polling não é evento. Toast, navegador e som usam a chave estável do problema, persistida em `localStorage`:
 
-- chave nova: abre;
-- mesma assinatura: silêncio;
-- severidade ou magnitude maior: agrava;
-- chave ausente: resolve.
+- chave nova: avisa uma vez;
+- mesma chave ativa: silêncio, inclusive com magnitude maior;
+- chave ausente: libera a deduplicação;
+- chave que retorna após desaparecer: avisa novamente.
 
-O som possui ainda cooldown global de oito segundos. Notificação do sistema é silenciosa porque o áudio é controlado separadamente.
+Fechar um toast ou recarregar a página não remove a deduplicação. O som possui ainda cooldown global de oito segundos. Notificação do sistema é silenciosa porque o áudio é controlado separadamente.
+
+O webhook usa estado persistente no servidor e conserva eventos de agravamento por severidade ou magnitude, pois seu consumidor pode precisar atualizar um incidente externo sem gerar ruído visual para o operador.
 
 ## Em análise move, não esconde
 
