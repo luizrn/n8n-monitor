@@ -26,6 +26,7 @@ All notable changes will be recorded here. The project follows [Keep a Changelog
 - automatic recovery now requires source confirmation;
 - scrollbars aligned with light and dark themes;
 - hardened Docker Compose with a read-only filesystem and minimal privileges.
+- Settings saving decoupled from full collection, preventing the button from remaining stuck on “Saving...”.
 
 ### Security
 

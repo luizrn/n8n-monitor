@@ -26,6 +26,7 @@ Todas as mudanças relevantes serão registradas aqui. O projeto segue [Keep a C
 - recuperação automática condicionada à confirmação da fonte;
 - barras de rolagem alinhadas aos temas claro e escuro;
 - Docker Compose endurecido com filesystem somente leitura e privilégios mínimos.
+- salvamento das Configurações desacoplado da coleta completa, evitando o botão preso em “Salvando…”.
 
 ### Segurança
 
