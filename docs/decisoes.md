@@ -66,6 +66,24 @@ A supressão na primeira carga vem do mesmo raciocínio: abrir a página com cin
 
 E o mouse sobre o toast congela a contagem. Um alerta que foge antes de ser lido não alertou nada.
 
+## Alerta se fecha sozinho quando o problema passou
+
+Se o fluxo que falhou voltou a rodar com sucesso **depois** do erro, o alerta sai da lista sem ninguém clicar em nada, e o rodapé registra qual execução provou isso.
+
+Um painel que exige gesto humano para limpar acumula alertas de problemas que já passaram. Depois de alguns dias, a lista deixa de descrever o presente — e um painel que descreve o passado não é consultado.
+
+O reconhecimento manual existe para o que a máquina não consegue decidir, e guarda a **magnitude** do momento: se o erro voltar a crescer, o alerta reaparece. Reconhecer silencia o que já se viu, nunca o que ainda vai acontecer. É a mesma regra do toast, aplicada à lista.
+
+Fica em disco, ao lado da config, e não no `localStorage`: marcar algo como "em análise" é informação de equipe, e some se ficar preso ao navegador de uma pessoa.
+
+## Filtrar na entrada do webhook, não depois
+
+Os fluxos que ouvem `crm_deal_updated` recebem evento de **toda** negociação do CRM e descartam a maioria no primeiro `If`. Só que descartar num `If` já custou uma execução: registro no banco, um slot de worker e, quando há um `Wait` antes do gate, segundos de espera por evento inútil.
+
+`options.onlyRunIf` no nó Webhook avalia a condição **antes de criar a execução** — requisição que não passa recebe 200 e desaparece. O filtro replica o gate que o fluxo já tinha, então o comportamento não muda; só o desperdício.
+
+E ele **falha aberto**: expressão que não avalia deixa a requisição passar, e os gates originais continuam no lugar. O risco é gastar execução à toa, nunca perder evento — que é a assimetria certa para um filtro de entrada.
+
 ## Sem dependências
 
 Node 18+ tem `fetch`. Um avaliador de cron cabe em 150 linhas. Um painel cabe num HTML. Não há build, não há `node_modules`, não há alerta de vulnerabilidade em transitiva de biblioteca de gráfico — para uma ferramenta que existe para ser confiável quando o resto está quebrado, isso é o requisito principal.
