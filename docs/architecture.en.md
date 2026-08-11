@@ -47,7 +47,9 @@ The data directory is selected through `N8N_MONITOR_DATA_DIR`, `%LOCALAPPDATA%\n
 | `tarefas.json` | tasks and transition history |
 | `webhook-estado.json` | delivered signatures and latest result per external destination |
 
-Secrets never appear in `GET /api/config`. They are replaced with markers such as `temChave`, `temToken`, `temBearer`, `temHeaderValor`, `temEvolutionApiKey`, and `temDiscordUrl`.
+Every file is atomically replaced and receives `0600` permissions; persisted records use prototype-free objects to reject dangerous keys. Secrets and the local path never appear in `GET /api/config`. They are replaced with markers such as `temChave`, `temToken`, `temUrl`, `temBearer`, `temHeaderValor`, `temEvolutionApiKey`, and `temDiscordUrl`.
+
+Missing acknowledgements and tasks are resolved only when their source responded successfully in the current cycle. An unreachable n8n instance or failed Kuma collection preserves prior state instead of producing a false recovery.
 
 `public/i18n.js` centralizes the `pt-BR`/`en` catalog, translates static and dynamic content, and provides the locale used by dates and numbers. The server validates and persists only these two language codes.
 

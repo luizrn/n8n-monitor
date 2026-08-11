@@ -1,29 +1,29 @@
 ---
-name: Relatar bug
-about: Informe um comportamento incorreto e reproduzível
+name: Bug / Relatar bug
+about: Report reproducible incorrect behavior / Informe um comportamento incorreto reproduzível
 title: "[Bug] "
 labels: bug
 assignees: ''
 ---
 
-## Comportamento observado
+## Comportamento observado / Observed behavior
 
-## Como reproduzir
+## Como reproduzir / Reproduction steps
 
 1.
 2.
 3.
 
-## Comportamento esperado
+## Comportamento esperado / Expected behavior
 
-## Ambiente
+## Ambiente / Environment
 
-- Sistema operacional:
+- Sistema operacional / OS:
 - Node.js:
-- Navegador:
+- Navegador / Browser:
 - n8n:
-- Instalação direta ou Docker:
+- Instalação direta ou Docker / Direct install or Docker:
 
-## Logs e evidências
+## Logs e evidências / Logs and evidence
 
-Remova chaves, tokens, cookies e dados pessoais antes de publicar.
+Remova chaves, tokens, cookies e dados pessoais antes de publicar. Remove keys, tokens, cookies, and personal data before publishing.

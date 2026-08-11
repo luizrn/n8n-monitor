@@ -18,3 +18,17 @@ All notable changes will be recorded here. The project follows [Keep a Changelog
 - n8n/Kuma connection summary in the empty state and direct access from the n8n panel to Logs;
 - Docker, Compose, and local automated tests;
 - documentation and community files for the open source project.
+
+### Changed
+
+- atomic private persistence for every state file;
+- automatic recovery now requires source confirmation;
+- scrollbars aligned with light and dark themes;
+- hardened Docker Compose with a read-only filesystem and minimal privileges.
+
+### Security
+
+- secret redaction in diagnostic URLs, messages, and stacks;
+- HTTP/HTTPS validation, reserved-header blocking, and prototype-pollution protection;
+- JSON-only write APIs with body limits, origin checks, and internal-detail-free errors;
+- local paths and secret webhook URLs removed from configuration responses.

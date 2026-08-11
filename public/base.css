@@ -6,7 +6,7 @@
   --ink:#101316; --ink2:#4d545b; --ink3:#828b93;
   --calmo:#2f6fd0; --bom:#2c7a52; --atencao:#a06507; --ruim:#c0392b;
   --pontoBom:#28a862; --pontoAtencao:#f2c014; --pontoRuim:#e0402c;
-  --grid:#eaedf0;
+  --grid:#eaedf0; --scroll-track:#f1f3f5; --scroll-thumb:#aab1b8; --scroll-hover:#7f8992;
 }
 @media (prefers-color-scheme: dark){
   :root{
@@ -14,11 +14,16 @@
     --ink:#eef0f2; --ink2:#a9b1b9; --ink3:#79828b;
     --calmo:#6fa8f5; --bom:#5cbd8a; --atencao:#e8bc4e; --ruim:#f0745c;
     --pontoBom:#43c98a; --pontoAtencao:#f5cf3d; --pontoRuim:#f4614a;
-    --grid:#232930;
+    --grid:#232930; --scroll-track:#111519; --scroll-thumb:#4b555e; --scroll-hover:#68747e;
   }
 }
 
-*{box-sizing:border-box}
+*{box-sizing:border-box;scrollbar-width:thin;scrollbar-color:var(--scroll-thumb) var(--scroll-track)}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:var(--scroll-track)}
+*::-webkit-scrollbar-thumb{background:var(--scroll-thumb);border:2px solid var(--scroll-track);border-radius:6px}
+*::-webkit-scrollbar-thumb:hover{background:var(--scroll-hover)}
+*::-webkit-scrollbar-corner{background:var(--scroll-track)}
 html,body{height:100%}
 body{margin:0;background:var(--sup);color:var(--ink);
   font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -28,9 +33,9 @@ a{color:var(--calmo);text-decoration:none}
 a:hover{text-decoration:underline}
 
 button,select,input,textarea{font:inherit}
-button{font-size:12.5px;color:var(--ink2);background:transparent;
+button,.botao{font-size:12.5px;color:var(--ink2);background:transparent;
   border:1px solid var(--linha);border-radius:7px;padding:5px 10px;cursor:pointer;flex:none}
-button:hover{color:var(--ink);border-color:var(--ink3)}
+button:hover,.botao:hover{color:var(--ink);border-color:var(--ink3);text-decoration:none}
 button.on{color:var(--ink);border-color:var(--ink3);background:var(--cartao)}
 input,select,textarea{font-size:13px;color:var(--ink);background:var(--cartao);
   border:1px solid var(--linha);border-radius:8px;padding:6px 10px}

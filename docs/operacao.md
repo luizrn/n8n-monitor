@@ -88,6 +88,8 @@ node scripts/diag-exec.mjs ID
 node scripts/dump-wf.mjs WORKFLOW_ID
 ```
 
+No Windows, os scripts usam `N8N_API_KEY` do ambiente ou do registro do usuário. Em Linux/macOS, exporte `N8N_API_KEY` e, quando necessário, `N8N_BASE_URL`. A saída aplica a mesma redação automática de segredos do painel.
+
 Erros frequentes:
 
 | Sintoma | Verificação |
@@ -102,7 +104,14 @@ Erros frequentes:
 ## Segurança
 
 - Não publique a porta sem autenticação externa.
+- As rotas de escrita aceitam somente `Content-Type: application/json`, limitam o corpo a 1 MB e recusam origens de navegador diferentes do host do painel.
+- URLs configuradas aceitam apenas HTTP/HTTPS e não podem conter usuário ou senha embutidos. Headers reservados não podem ser sobrescritos por destinos HTTP.
+- Configuração, tarefas, reconhecimentos e deduplicação são gravados de forma atômica com permissão `0600`. A API não expõe o caminho do host.
+- Uma tarefa ou reconhecimento só é limpo quando a fonte respondeu e confirmou que o alerta desapareceu. Indisponibilidade do n8n ou Kuma não conta como recuperação.
+- URLs de webhook HTTP e Discord, tokens e chaves nunca retornam em `GET /api/config`; campo secreto vazio preserva o valor salvo.
 - Não monte o diretório de dados dentro do repositório.
 - Revogue imediatamente qualquer chave que apareça em logs ou issue.
 - Revise diagnósticos antes de compartilhar, mesmo com redação automática.
 - Atualize regularmente Node, a imagem base e o Uptime Kuma.
+
+O `compose.yaml` remove capabilities Linux, bloqueia elevação de privilégio e usa filesystem somente leitura, exceto pelo volume `/data` e o `tmpfs` de `/tmp`.

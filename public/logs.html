@@ -79,12 +79,12 @@
   </div>
 </div>
 
-<dialog id="dlg"><div class="dlg">
+<dialog id="dlg" aria-labelledby="dlgTitulo"><div class="dlg">
   <h3 id="dlgTitulo"></h3>
   <div class="obs" id="dlgSub"></div>
   <div style="margin:12px 0;display:flex;gap:8px">
     <button id="btCopiarDiag">Copiar diagnóstico</button>
-    <a id="dlgLink" href="#" target="_blank"><button>Abrir no n8n →</button></a>
+    <a class="botao" id="dlgLink" href="#" target="_blank" rel="noopener noreferrer">Abrir no n8n →</a>
     <span class="cresce"></span>
     <button id="btFechar">Fechar</button>
   </div>
@@ -137,7 +137,7 @@ function chipsInst(d){
 function linha(e){
   return `<tr class="clic" data-id="${esc(e.id)}" data-wf="${esc(e.workflowId)}" data-fluxo="${esc(e.fluxo)}" data-inst="${esc(e.instanciaId)}">
     <td class="n"><a href="${esc(estado.bases[e.instanciaId]||'')}/workflow/${esc(e.workflowId)}/executions/${esc(e.id)}"
-       target="_blank" onclick="event.stopPropagation()">#${esc(e.id)}</a></td>
+       target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">#${esc(e.id)}</a></td>
     <td>${esc(e.fluxo)}</td>
     <td><span class="tag">${esc(e.instancia)}</span></td>
     <td><span class="st"><span class="pt" style="background:${COR[e.status]||'var(--ink3)'}"></span>${esc(e.status)}</span></td>

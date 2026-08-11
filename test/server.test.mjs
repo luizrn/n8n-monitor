@@ -35,6 +35,8 @@ test('health responde e migra configuracao legada sem expor chave', async (t) =>
   assert.equal(destino.temHeaderValor, true)
   assert.equal(destino.temEvolutionApiKey, true)
   assert.equal(destino.temDiscordUrl, true)
+  assert.equal(destino.temUrl, false)
+  assert.equal(cfg.caminhoConfig, undefined)
 })
 
 test('ignora destino legado vazio para iniciar a aba de envio sem exemplo', async (t) => {
@@ -61,7 +63,34 @@ test('salva varios destinos e preserva segredos omitidos', async (t) => {
   assert.equal(cfg.idioma, 'en')
   assert.deepEqual(cfg.webhook.destinos.map((d) => d.id), ['hook', 'zap'])
   assert.equal(cfg.webhook.destinos[0].temBearer, true)
+  assert.equal(cfg.webhook.destinos[0].temUrl, true)
   assert.equal(cfg.webhook.destinos[1].temEvolutionApiKey, true)
   assert.ok(!JSON.stringify(cfg).includes('bearer-secreto'))
   assert.ok(!JSON.stringify(cfg).includes('evo-secreta'))
+  assert.ok(!JSON.stringify(cfg).includes('https://hook'))
+})
+
+test('aplica headers de seguranca e rejeita POST simples ou invalido', async (t) => {
+  const s = await subir()
+  t.after(async () => { s.proc.kill('SIGTERM'); await rm(s.dir, { recursive: true, force: true }) })
+  const endpoint = `http://127.0.0.1:${s.porta}/api/config`
+  const get = await fetch(endpoint)
+  assert.equal(get.headers.get('x-content-type-options'), 'nosniff')
+  assert.equal(get.headers.get('x-frame-options'), 'DENY')
+  assert.match(get.headers.get('content-security-policy'), /frame-ancestors 'none'/)
+  assert.equal((await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{}' })).status, 415)
+  assert.equal((await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{' })).status, 400)
+})
+
+test('rejeita URLs inseguras sem alterar a configuracao', async (t) => {
+  const s = await subir()
+  t.after(async () => { s.proc.kill('SIGTERM'); await rm(s.dir, { recursive: true, force: true }) })
+  const endpoint = `http://127.0.0.1:${s.porta}/api/config`
+  const antes = (await (await fetch(endpoint)).json()).instancias
+  const r = await fetch(endpoint, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ instancias: [{ nome: 'Insegura', baseUrl: 'javascript:alert(1)', apiKey: 'x' }] }),
+  })
+  assert.equal(r.status, 400)
+  assert.deepEqual((await (await fetch(endpoint)).json()).instancias, antes)
 })

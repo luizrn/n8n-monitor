@@ -8,7 +8,7 @@
 // Escuta so em 127.0.0.1.
 
 import { createServer } from 'node:http'
-import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, rename, rm, chmod } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { join, dirname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -16,9 +16,10 @@ import { gatilhosDe, regraParaCron, descreverRegra, esperadas, comparar } from '
 import { clienteDe, criarCliente, descartarClientes, idDeInstancia } from './instancias.mjs'
 import { coletarUptime } from './uptime.mjs'
 import { criarRepo, ESTADOS as ESTADOS_TAREFA, normalizarEstado } from './tarefas.mjs'
-import { montarAlertas } from './alertas.mjs'
+import { montarAlertas, podeConfirmarRecuperacao } from './alertas.mjs'
 import { criarResolvedorRdap } from './rdap.mjs'
 import { criarDispatcherWebhook, payloadDe } from './webhook.mjs'
+import { chaveDeRegistroValida, redigir, redigirTexto, registroSeguro, urlHttpValida } from './seguranca.mjs'
 
 const AQUI = dirname(fileURLToPath(import.meta.url))
 const PORTA = Number(process.env.PORT || 8787)
@@ -83,6 +84,24 @@ const PADRAO = {
 
 let config = { ...PADRAO }
 
+const numeroLimitado = (valor, minimo, maximo, padrao) => {
+  const numero = Number(valor)
+  return Number.isFinite(numero) ? Math.max(minimo, Math.min(maximo, numero)) : padrao
+}
+
+let sequenciaGravacao = 0
+async function gravarPrivado(caminho, conteudo) {
+  await mkdir(dirname(caminho), { recursive: true })
+  const temporario = `${caminho}.${process.pid}.${Date.now()}.${++sequenciaGravacao}.tmp`
+  try {
+    await writeFile(temporario, conteudo, { mode: 0o600 })
+    await rename(temporario, caminho)
+    await chmod(caminho, 0o600).catch(() => {})
+  } finally {
+    await rm(temporario, { force: true }).catch(() => {})
+  }
+}
+
 const LIMITE_TRAVADA_MIN = 30
 const JANELA_MS = 3600000
 const ehErro = (s) => s === 'error' || s === 'crashed'
@@ -102,11 +121,12 @@ async function lerRegistroWindows() {
 }
 
 function saneaInstancia(cru, i) {
-  const nome = String(cru?.nome || '').trim() || `n8n ${i + 1}`
+  const nome = (String(cru?.nome || '').trim() || `n8n ${i + 1}`).slice(0, 120)
+  const idInformado = String(cru?.id || '').trim().slice(0, 200)
   return {
-    id: String(cru?.id || '').trim() || idDeInstancia(nome),
+    id: chaveDeRegistroValida(idInformado) ? idInformado : idDeInstancia(nome),
     nome,
-    baseUrl: String(cru?.baseUrl || '').trim().replace(/\/+$/, ''),
+    baseUrl: String(cru?.baseUrl || '').trim().replace(/\/+$/, '').slice(0, 2048),
     apiKey: String(cru?.apiKey || ''),
     ativo: cru?.ativo !== false,
   }
@@ -117,20 +137,20 @@ function saneaDestino(cru, i) {
   const nomePadrao = { webhook: 'Webhook HTTP', evolution: 'WhatsApp', discord: 'Discord' }[modo]
   return {
     ...DESTINO_PADRAO,
-    id: String(cru?.id || '').trim() || `destino-${i + 1}`,
-    nome: String(cru?.nome || '').trim() || nomePadrao,
+    id: chaveDeRegistroValida(String(cru?.id || '').trim()) ? String(cru.id).trim().slice(0, 200) : `destino-${i + 1}`,
+    nome: (String(cru?.nome || '').trim() || nomePadrao).slice(0, 120),
     ativo: cru?.ativo === true,
     modo,
-    url: String(cru?.url || '').trim(),
+    url: String(cru?.url || '').trim().slice(0, 4096),
     metodo: ['POST', 'PUT', 'PATCH'].includes(cru?.metodo) ? cru.metodo : 'POST',
     bearer: String(cru?.bearer || '').trim(),
-    headerNome: String(cru?.headerNome || '').trim(),
-    headerValor: String(cru?.headerValor || '').trim(),
-    evolutionUrl: String(cru?.evolutionUrl || '').trim().replace(/\/+$/, ''),
+    headerNome: String(cru?.headerNome || '').trim().slice(0, 128),
+    headerValor: String(cru?.headerValor || '').trim().slice(0, 8192),
+    evolutionUrl: String(cru?.evolutionUrl || '').trim().replace(/\/+$/, '').slice(0, 2048),
     evolutionInstancia: String(cru?.evolutionInstancia || '').trim(),
     evolutionApiKey: String(cru?.evolutionApiKey || '').trim(),
     evolutionNumero: String(cru?.evolutionNumero || '').replace(/\D/g, ''),
-    discordUrl: String(cru?.discordUrl || '').trim(),
+    discordUrl: String(cru?.discordUrl || '').trim().slice(0, 4096),
     discordNome: String(cru?.discordNome || 'n8n-monitor').trim().slice(0, 80),
   }
 }
@@ -163,6 +183,14 @@ function migrar(cru) {
   if (!['pt-BR', 'en'].includes(c.idioma)) c.idioma = 'pt-BR'
   c.notificacoes = { ...NOTIF_PADRAO, ...(cru?.notificacoes || {}) }
   c.uptimeKuma = { ...UPTIME_PADRAO, ...(cru?.uptimeKuma || {}) }
+  c.horasCron = numeroLimitado(c.horasCron, 1, 168, PADRAO.horasCron)
+  c.toleranciaMin = numeroLimitado(c.toleranciaMin, 0, 1440, PADRAO.toleranciaMin)
+  c.notificacoes.toastSeg = numeroLimitado(c.notificacoes.toastSeg, 0, 600, NOTIF_PADRAO.toastSeg)
+  c.notificacoes.volume = numeroLimitado(c.notificacoes.volume, 0, 1, NOTIF_PADRAO.volume)
+  c.notificacoes.navegador = c.notificacoes.navegador === true
+  c.notificacoes.som = c.notificacoes.som === true
+  c.uptimeKuma.avisarCertDias = numeroLimitado(c.uptimeKuma.avisarCertDias, 1, 365, UPTIME_PADRAO.avisarCertDias)
+  c.uptimeKuma.monitores = registroSeguro(c.uptimeKuma.monitores)
   const webhookCru = cru?.webhook
   const destinosCrus = Array.isArray(webhookCru?.destinos)
     ? webhookCru.destinos
@@ -194,7 +222,11 @@ function migrar(cru) {
 
 async function carregarConfig() {
   let cru = {}
-  try { cru = JSON.parse(await readFile(ARQ_CONFIG, 'utf8')) } catch { cru = {} }
+  try {
+    cru = JSON.parse(await readFile(ARQ_CONFIG, 'utf8'))
+  } catch (erro) {
+    if (erro?.code !== 'ENOENT') throw new Error(`configuração inválida em ${ARQ_CONFIG}: ${erro.message}`)
+  }
   config = migrar(cru)
 
   // Semeia a primeira instancia a partir do ambiente, para o painel funcionar de
@@ -216,8 +248,7 @@ async function carregarConfig() {
 }
 
 async function salvarConfig() {
-  await mkdir(DIR_CONFIG, { recursive: true })
-  await writeFile(ARQ_CONFIG, JSON.stringify(config, null, 2), { mode: 0o600 })
+  await gravarPrivado(ARQ_CONFIG, JSON.stringify(config, null, 2))
 }
 
 const instanciasAtivas = () => config.instancias.filter((i) => i.ativo && i.apiKey && i.baseUrl)
@@ -230,7 +261,7 @@ const publica = (i) => ({
 
 const publicaDestino = (d) => ({
   id: d.id, nome: d.nome, ativo: d.ativo, modo: d.modo,
-  url: d.url, metodo: d.metodo, temBearer: Boolean(d.bearer),
+  temUrl: Boolean(d.url), metodo: d.metodo, temBearer: Boolean(d.bearer),
   headerNome: d.headerNome, temHeaderValor: Boolean(d.headerValor),
   evolutionUrl: d.evolutionUrl, evolutionInstancia: d.evolutionInstancia,
   evolutionNumero: d.evolutionNumero, temEvolutionApiKey: Boolean(d.evolutionApiKey),
@@ -246,39 +277,24 @@ const publicaDestino = (d) => ({
 // A magnitude no momento do reconhecimento e parte do registro. Assim, se o erro
 // voltar a crescer, ele reaparece sozinho — reconhecer silencia o que ja se viu,
 // nao o que ainda vai acontecer.
-let reconhecimentos = {}
+let reconhecimentos = registroSeguro()
 
 async function carregarReconhecimentos() {
-  try { reconhecimentos = JSON.parse(await readFile(ARQ_RECON, 'utf8')) } catch { reconhecimentos = {} }
+  try { reconhecimentos = registroSeguro(JSON.parse(await readFile(ARQ_RECON, 'utf8'))) } catch { reconhecimentos = registroSeguro() }
 }
 async function salvarReconhecimentos() {
-  await mkdir(DIR_CONFIG, { recursive: true })
-  await writeFile(ARQ_RECON, JSON.stringify(reconhecimentos, null, 2))
-}
-function limparReconhecimentosVelhos() {
-  const limite = Date.now() - 7 * 86400000
-  let mudou = false
-  for (const [k, v] of Object.entries(reconhecimentos)) {
-    if (new Date(v.em).getTime() < limite) { delete reconhecimentos[k]; mudou = true }
-  }
-  if (mudou) salvarReconhecimentos().catch(() => {})
+  await gravarPrivado(ARQ_RECON, JSON.stringify(reconhecimentos, null, 2))
 }
 
 const repoTarefas = criarRepo({
   ler: () => readFile(ARQ_TAREFAS, 'utf8'),
-  gravar: async (t) => {
-    await mkdir(DIR_CONFIG, { recursive: true })
-    await writeFile(ARQ_TAREFAS, t, { mode: 0o600 })
-  },
+  gravar: (t) => gravarPrivado(ARQ_TAREFAS, t),
 })
 
 const rdap = criarResolvedorRdap()
 const webhook = criarDispatcherWebhook({
   ler: () => readFile(ARQ_WEBHOOK, 'utf8'),
-  gravar: async (texto) => {
-    await mkdir(DIR_CONFIG, { recursive: true })
-    await writeFile(ARQ_WEBHOOK, texto, { mode: 0o600 })
-  },
+  gravar: (texto) => gravarPrivado(ARQ_WEBHOOK, texto),
   obterConfig: () => config.webhook,
 })
 
@@ -666,13 +682,19 @@ async function coletarCompleto(forcar = false) {
     ])
     const alertasAtivos = montarAlertas(estado, cron, uptime)
     const chaves = new Set(alertasAtivos.map((a) => a.chave))
+    const podeResolver = (item) => podeConfirmarRecuperacao(item, estado, uptime)
 
     let limpou = false
     for (const chave of Object.keys(reconhecimentos)) {
-      if (!chaves.has(chave)) { delete reconhecimentos[chave]; limpou = true }
+      const reconhecimento = { chave, ...reconhecimentos[chave] }
+      const tarefa = repoTarefas.pegar(chave)
+      if (!chaves.has(chave) && podeResolver({ ...tarefa, ...reconhecimento })) {
+        delete reconhecimentos[chave]
+        limpou = true
+      }
     }
     if (limpou) await salvarReconhecimentos()
-    await repoTarefas.resolverAusentes(chaves)
+    await repoTarefas.resolverAusentes(chaves, podeResolver)
 
     const alertas = alertasAtivos.filter((a) => {
       const r = reconhecimentos[a.chave]
@@ -684,7 +706,7 @@ async function coletarCompleto(forcar = false) {
       tarefasContagem: repoTarefas.contagem(),
     }
     cacheCompleto = { em: Date.now(), dados }
-    webhook.processar(alertasAtivos).catch((e) => console.error('webhook:', e.message || e))
+    webhook.processar(alertasAtivos, podeResolver).catch((e) => console.error('webhook:', e.message || e))
     return dados
   })()
   try { return await coletaEmCurso } finally { coletaEmCurso = null }
@@ -699,28 +721,6 @@ function invalidarEstadoCompleto() {
 // Os dados de execucao carregam segredos em texto puro (tokens chumbados nos
 // query params dos nos HTTP). O dump que vai para a area de transferencia e
 // depois para um chat NAO pode levar isso.
-const CHAVE_SENSIVEL = /(token|apikey|api_key|secret|senha|password|authorization|cookie|bearer|credential)/i
-
-function redigir(valor, prof = 0) {
-  if (prof > 12) return '[fundo]'
-  if (Array.isArray(valor)) return valor.map((v) => redigir(v, prof + 1))
-  if (valor && typeof valor === 'object') {
-    const saida = {}
-    for (const [k, v] of Object.entries(valor)) {
-      if (CHAVE_SENSIVEL.test(k)) { saida[k] = '[REDIGIDO]'; continue }
-      // {name: "token", value: "..."} - o padrao dos parametros do n8n
-      if (k === 'value' && CHAVE_SENSIVEL.test(String(valor.name ?? ''))) { saida[k] = '[REDIGIDO]'; continue }
-      saida[k] = redigir(v, prof + 1)
-    }
-    return saida
-  }
-  if (typeof valor === 'string') {
-    if (/^ey[A-Za-z0-9_-]{20,}\./.test(valor)) return '[REDIGIDO:jwt]'
-    return valor
-  }
-  return valor
-}
-
 function montarDiagnostico(meta, fluxo, exec, inst) {
   const rd = exec?.data?.resultData
   const falha = acharFalha(rd?.runData) || (rd?.error ? { no: rd.lastNodeExecuted, erro: rd.error } : null)
@@ -737,11 +737,11 @@ function montarDiagnostico(meta, fluxo, exec, inst) {
   L.push('')
   if (e.message || e.description || e.httpCode) {
     L.push('### Mensagem')
-    if (e.message) L.push(`\`\`\`\n${e.message}\n\`\`\``)
-    if (e.description) L.push(`descricao: ${e.description}`)
+    if (e.message) L.push(`\`\`\`\n${redigirTexto(e.message)}\n\`\`\``)
+    if (e.description) L.push(`descricao: ${redigirTexto(e.description)}`)
     if (e.httpCode) L.push(`httpCode: ${e.httpCode}`)
     if (e.name) L.push(`tipo: ${e.name}`)
-    if (Array.isArray(e.messages) && e.messages.length) L.push(`dicas: ${e.messages.join(' | ')}`)
+    if (Array.isArray(e.messages) && e.messages.length) L.push(`dicas: ${redigirTexto(e.messages.join(' | '))}`)
     L.push('')
   }
   if (e.node) {
@@ -771,7 +771,7 @@ function montarDiagnostico(meta, fluxo, exec, inst) {
   if (e.stack) {
     L.push('### Stack')
     L.push('```')
-    L.push(String(e.stack).split('\n').slice(0, 12).join('\n'))
+    L.push(redigirTexto(e.stack).split('\n').slice(0, 12).join('\n'))
     L.push('```')
   }
   L.push('')
@@ -809,23 +809,48 @@ function json(res, codigo, corpo) {
   res.end(s)
 }
 
+class ErroHttp extends Error {
+  constructor(status, message) { super(message); this.status = status }
+}
+
 async function lerCorpo(req) {
+  if (!String(req.headers['content-type'] || '').toLowerCase().startsWith('application/json')) {
+    throw new ErroHttp(415, 'Content-Type deve ser application/json')
+  }
+  const origem = req.headers.origin
+  if (origem) {
+    let hostOrigem = ''
+    try { hostOrigem = new URL(origem).host } catch { /* origem inválida */ }
+    if (!hostOrigem || hostOrigem !== req.headers.host) throw new ErroHttp(403, 'origem não permitida')
+  }
   const partes = []
+  let total = 0
   for await (const c of req) {
     partes.push(c)
-    if (partes.reduce((n, p) => n + p.length, 0) > 1e6) throw new Error('corpo grande')
+    total += c.length
+    if (total > 1e6) throw new ErroHttp(413, 'corpo excede 1 MB')
   }
-  return JSON.parse(Buffer.concat(partes).toString('utf8') || '{}')
+  try { return JSON.parse(Buffer.concat(partes).toString('utf8') || '{}') }
+  catch { throw new ErroHttp(400, 'JSON inválido') }
 }
 
 const semInstancia = () => !instanciasAtivas().length
 
 const servidor = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1')
+  res.setHeader('x-content-type-options', 'nosniff')
+  res.setHeader('x-frame-options', 'DENY')
+  res.setHeader('referrer-policy', 'no-referrer')
+  res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()')
+  res.setHeader('content-security-policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 
   try {
-    if (url.pathname === '/api/health') {
+    if (url.pathname === '/api/health' && req.method === 'GET') {
       return json(res, 200, { ok: true, uptimeSeg: Math.round(process.uptime()), coletaEm: cacheCompleto.dados?.momento || null })
+    }
+    if (url.pathname === '/favicon.ico' && req.method === 'GET') {
+      res.writeHead(204, { 'cache-control': 'public, max-age=86400' })
+      return res.end()
     }
 
     // ---------------------------------------------------------- config
@@ -835,7 +860,7 @@ const servidor = createServer(async (req, res) => {
         instancias: config.instancias.map(publica),
         ativo: config.ativo,
         idioma: config.idioma,
-        caminhoConfig: ARQ_CONFIG,
+        armazenamento: 'privado',
         notificacoes: config.notificacoes,
         uptimeKuma: {
           ativo: uk.ativo, baseUrl: uk.baseUrl, slug: uk.slug,
@@ -851,20 +876,22 @@ const servidor = createServer(async (req, res) => {
 
       if (Array.isArray(corpo.instancias)) {
         const antigas = new Map(config.instancias.map((i) => [i.id, i]))
-        config.instancias = corpo.instancias.map((cru, i) => {
+        const novas = corpo.instancias.slice(0, 100).map((cru, i) => {
           const s = saneaInstancia(cru, i)
           // Chave vazia = manter a atual. Nunca devolvemos o valor ao navegador,
           // logo ele nao teria como reenviar o que ja esta salvo.
           if (!s.apiKey) s.apiKey = antigas.get(s.id)?.apiKey || ''
+          if (s.baseUrl && !urlHttpValida(s.baseUrl)) throw new ErroHttp(400, `URL inválida na instância ${s.nome}`)
           return s
         })
         const vistos = new Set()
-        for (const inst of config.instancias) {
+        for (const inst of novas) {
           let id = inst.id, n = 2
           while (vistos.has(id)) id = `${inst.id}-${n++}`
           inst.id = id
           vistos.add(id)
         }
+        config.instancias = novas
       }
 
       if (typeof corpo.ativo === 'boolean') config.ativo = corpo.ativo
@@ -873,25 +900,27 @@ const servidor = createServer(async (req, res) => {
       if (corpo.notificacoes && typeof corpo.notificacoes === 'object') {
         const n = corpo.notificacoes
         config.notificacoes = {
-          toastSeg: Math.max(0, Math.min(600, Number(n.toastSeg ?? config.notificacoes.toastSeg))),
+          toastSeg: numeroLimitado(n.toastSeg, 0, 600, config.notificacoes.toastSeg),
           navegador: Boolean(n.navegador),
           som: Boolean(n.som),
-          volume: Math.max(0, Math.min(1, Number(n.volume ?? config.notificacoes.volume))),
+          volume: numeroLimitado(n.volume, 0, 1, config.notificacoes.volume),
         }
       }
 
       if (corpo.uptimeKuma && typeof corpo.uptimeKuma === 'object') {
         const u = corpo.uptimeKuma
         const atual = config.uptimeKuma
-        config.uptimeKuma = {
+        const novaUptime = {
           ativo: typeof u.ativo === 'boolean' ? u.ativo : atual.ativo,
           baseUrl: typeof u.baseUrl === 'string' ? u.baseUrl.trim().replace(/\/+$/, '') : atual.baseUrl,
           // token vazio = manter o atual, mesma regra das chaves do n8n
           token: typeof u.token === 'string' && u.token.trim() ? u.token.trim() : atual.token,
           slug: typeof u.slug === 'string' ? u.slug.trim() : atual.slug,
-          monitores: u.monitores && typeof u.monitores === 'object' ? u.monitores : atual.monitores,
-          avisarCertDias: Math.max(1, Math.min(365, Number(u.avisarCertDias ?? atual.avisarCertDias))),
+          monitores: u.monitores && typeof u.monitores === 'object' ? registroSeguro(u.monitores) : atual.monitores,
+          avisarCertDias: numeroLimitado(u.avisarCertDias, 1, 365, atual.avisarCertDias),
         }
+        if (novaUptime.baseUrl && !urlHttpValida(novaUptime.baseUrl)) throw new ErroHttp(400, 'URL inválida do Uptime Kuma')
+        config.uptimeKuma = novaUptime
         cacheUptime = { em: 0, dados: null }
       }
 
@@ -899,16 +928,22 @@ const servidor = createServer(async (req, res) => {
         const w = corpo.webhook
         if (Array.isArray(w.destinos)) {
           const antigos = new Map(config.webhook.destinos.map((d) => [d.id, d]))
-          config.webhook = { destinos: idsUnicos(w.destinos.map((cru, i) => {
+          const destinos = idsUnicos(w.destinos.slice(0, 50).map((cru, i) => {
             const anterior = antigos.get(String(cru?.id || '').trim()) || {}
             return saneaDestino({
               ...anterior, ...cru,
+              url: String(cru?.url || '').trim() || anterior.url,
               bearer: String(cru?.bearer || '').trim() || anterior.bearer,
               headerValor: String(cru?.headerValor || '').trim() || anterior.headerValor,
               evolutionApiKey: String(cru?.evolutionApiKey || '').trim() || anterior.evolutionApiKey,
               discordUrl: String(cru?.discordUrl || '').trim() || anterior.discordUrl,
             }, i)
-          }).filter(destinoConfigurado)) }
+          }).filter(destinoConfigurado))
+          for (const destino of destinos) {
+            const urls = [destino.url, destino.evolutionUrl, destino.discordUrl].filter(Boolean)
+            if (urls.some((valor) => !urlHttpValida(valor))) throw new ErroHttp(400, `URL inválida no destino ${destino.nome}`)
+          }
+          config.webhook = { destinos }
         }
       }
 
@@ -935,7 +970,7 @@ const servidor = createServer(async (req, res) => {
     }
 
     // ---------------------------------------------------------- uptime kuma
-    if (url.pathname === '/api/uptime') {
+    if (url.pathname === '/api/uptime' && req.method === 'GET') {
       try {
         return json(res, 200, await uptimeAtual(Boolean(url.searchParams.get('recarregar'))))
       } catch (e) {
@@ -968,6 +1003,7 @@ const servidor = createServer(async (req, res) => {
       const anterior = config.webhook.destinos.find((d) => d.id === c.id) || {}
       const cfg = saneaDestino({
         ...anterior, ...c,
+        url: String(c.url || '').trim() || anterior.url,
         bearer: String(c.bearer || '').trim() || anterior.bearer,
         headerValor: String(c.headerValor || '').trim() || anterior.headerValor,
         evolutionApiKey: String(c.evolutionApiKey || '').trim() || anterior.evolutionApiKey,
@@ -977,7 +1013,7 @@ const servidor = createServer(async (req, res) => {
     }
 
     // ---------------------------------------------------------- estado
-    if (url.pathname === '/api/state') {
+    if (url.pathname === '/api/state' && req.method === 'GET') {
       if (!config.ativo) return json(res, 200, { ok: false, motivo: 'pausado' })
       if (semInstancia() && !config.uptimeKuma.ativo) return json(res, 200, { ok: false, motivo: 'sem-chave' })
       try {
@@ -989,7 +1025,7 @@ const servidor = createServer(async (req, res) => {
 
     if (url.pathname === '/api/reconhecer' && req.method === 'POST') {
       const c = await lerCorpo(req)
-      if (!c.chave) return json(res, 400, { ok: false, erro: 'falta chave' })
+      if (!chaveDeRegistroValida(c.chave)) return json(res, 400, { ok: false, erro: 'chave inválida' })
 
       if (!c.estado) {
         delete reconhecimentos[c.chave]
@@ -1000,17 +1036,20 @@ const servidor = createServer(async (req, res) => {
         // que guarda a magnitude — se o erro crescer alem do que foi visto, o
         // alerta reaparece mesmo havendo tarefa aberta.
         reconhecimentos[c.chave] = {
-          estado: 'analise', magnitude: Number(c.magnitude ?? 1), em: new Date().toISOString(),
+          estado: 'analise', magnitude: numeroLimitado(c.magnitude, 1, 1e9, 1),
+          instanciaId: c.alerta?.instanciaId || null, origem: c.alerta?.origem || null,
+          em: new Date().toISOString(),
         }
         await repoTarefas.abrir({ ...(c.alerta || {}), chave: c.chave, magnitude: c.magnitude })
       } else {
         reconhecimentos[c.chave] = {
-          estado: 'resolvido', magnitude: Number(c.magnitude ?? 1), em: new Date().toISOString(),
+          estado: 'resolvido', magnitude: numeroLimitado(c.magnitude, 1, 1e9, 1),
+          instanciaId: c.alerta?.instanciaId || null, origem: c.alerta?.origem || null,
+          em: new Date().toISOString(),
         }
         webhook.resolver(c.alerta || { chave: c.chave }, 'manual').catch(() => {})
       }
 
-      limparReconhecimentosVelhos()
       await salvarReconhecimentos()
       invalidarEstadoCompleto()
       return json(res, 200, {
@@ -1033,7 +1072,7 @@ const servidor = createServer(async (req, res) => {
 
     if (url.pathname === '/api/tarefas' && req.method === 'POST') {
       const c = await lerCorpo(req)
-      if (!c.chave) return json(res, 400, { ok: false, erro: 'falta chave' })
+      if (!chaveDeRegistroValida(c.chave)) return json(res, 400, { ok: false, erro: 'chave inválida' })
 
       if (c.acao === 'remover') {
         await repoTarefas.remover(c.chave)
@@ -1048,6 +1087,7 @@ const servidor = createServer(async (req, res) => {
         reconhecimentos[c.chave] = {
           estado: t.estado === 'resolvido' ? 'resolvido' : 'analise',
           magnitude: Number(t.magnitude || 1),
+          instanciaId: t.instanciaId || null, origem: t.origem || null,
           em: new Date().toISOString(),
         }
         await salvarReconhecimentos()
@@ -1062,7 +1102,7 @@ const servidor = createServer(async (req, res) => {
     }
 
     // ---------------------------------------------------------- logs
-    if (url.pathname === '/api/logs') {
+    if (url.pathname === '/api/logs' && req.method === 'GET') {
       if (semInstancia()) return json(res, 200, { ok: false, motivo: 'sem-chave' })
       const { itens, truncado, falhas } = await recentesDeTodas()
 
@@ -1070,9 +1110,9 @@ const servidor = createServer(async (req, res) => {
       const status = (url.searchParams.get('status') || '').split(',').filter(Boolean)
       const modo = (url.searchParams.get('modo') || '').split(',').filter(Boolean)
       const insts = (url.searchParams.get('instancias') || '').split(',').filter(Boolean)
-      const horas = Number(url.searchParams.get('horas') || 0)
-      const pagina = Math.max(0, Number(url.searchParams.get('pagina') || 0))
-      const porPagina = Math.min(500, Math.max(10, Number(url.searchParams.get('limite') || 100)))
+      const horas = numeroLimitado(url.searchParams.get('horas'), 0, 168, 0)
+      const pagina = Math.floor(numeroLimitado(url.searchParams.get('pagina'), 0, 1e6, 0))
+      const porPagina = Math.floor(numeroLimitado(url.searchParams.get('limite'), 10, 500, 100))
       const corte = horas ? Date.now() - horas * 3600000 : null
 
       const filtrados = itens.filter((e) => {
@@ -1107,9 +1147,9 @@ const servidor = createServer(async (req, res) => {
     }
 
     // ---------------------------------------------------------- dashboard
-    if (url.pathname === '/api/dashboard') {
+    if (url.pathname === '/api/dashboard' && req.method === 'GET') {
       if (semInstancia()) return json(res, 200, { ok: false, motivo: 'sem-chave' })
-      const horas = Math.min(168, Math.max(1, Number(url.searchParams.get('horas') || 24)))
+      const horas = numeroLimitado(url.searchParams.get('horas'), 1, 168, 24)
       // 250 execuções por página; quanto maior a janela, mais fundo é preciso ler
       const paginas = horas <= 2 ? 10 : horas <= 12 ? 30 : 60
       const { itens, truncado } = await recentesDeTodas(paginas)
@@ -1191,7 +1231,7 @@ const servidor = createServer(async (req, res) => {
       })
     }
 
-    if (url.pathname === '/api/cron') {
+    if (url.pathname === '/api/cron' && req.method === 'GET') {
       if (semInstancia()) return json(res, 200, { ok: false, motivo: 'sem-chave' })
       try {
         if (url.searchParams.get('recarregar')) cacheCron.clear()
@@ -1201,7 +1241,7 @@ const servidor = createServer(async (req, res) => {
       }
     }
 
-    if (url.pathname === '/api/execucao') {
+    if (url.pathname === '/api/execucao' && req.method === 'GET') {
       const id = url.searchParams.get('id')
       if (!id) return json(res, 400, { ok: false, erro: 'falta id' })
       // Sem a instancia nao ha como saber a QUEM pedir a execucao: os ids sao
@@ -1222,6 +1262,10 @@ const servidor = createServer(async (req, res) => {
     }
 
     // ---------------------------------------------------------- estaticos
+    if (!['GET', 'HEAD'].includes(req.method)) {
+      res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8', allow: 'GET, HEAD' })
+      return res.end('método não permitido')
+    }
     const PAGINAS = {
       '/': 'index.html',
       '/dashboard': 'dashboard.html',
@@ -1255,15 +1299,20 @@ const servidor = createServer(async (req, res) => {
     res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
     res.end('nao encontrado')
   } catch (e) {
-    json(res, 500, { ok: false, erro: String(e.message || e) })
+    if (!e?.status || e.status >= 500) console.error('http:', e)
+    json(res, e?.status || 500, { ok: false, erro: e?.status ? e.message : 'erro interno' })
   }
 })
+
+servidor.requestTimeout = 30000
+servidor.headersTimeout = 15000
+servidor.keepAliveTimeout = 5000
+servidor.maxRequestsPerSocket = 1000
 
 await carregarConfig()
 await carregarReconhecimentos()
 await repoTarefas.carregar()
 await webhook.carregar()
-limparReconhecimentosVelhos()
 const timerColeta = setInterval(() => {
   if (config.ativo && (instanciasAtivas().length || config.uptimeKuma.ativo)) {
     coletarCompleto(true).catch((e) => console.error('coleta:', e.message || e))

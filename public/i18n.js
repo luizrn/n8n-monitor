@@ -98,6 +98,7 @@ window.I18n = (() => {
   }
 
   const padroes = [
+    [/^Dados protegidos em armazenamento local com acesso restrito\.?$/, 'Protected in restricted local storage.'],
     [/^(\d+) item\(ns\)$/, '$1 item(s)'],
     [/^(\d+) instâncias n8n conectadas$/, '$1 connected n8n instances'],
     [/^Uptime Kuma \((\d+) monitores\)$/, 'Uptime Kuma ($1 monitors)'],

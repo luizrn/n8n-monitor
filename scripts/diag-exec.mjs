@@ -1,19 +1,25 @@
 // Diagnostica uma execucao pesada sem imprimir os dados: so contagens por no.
 import { execFileSync } from 'node:child_process'
+import { redigir, redigirTexto, urlHttpValida } from '../seguranca.mjs'
 
 const base = process.env.N8N_BASE_URL || 'http://localhost:5678'
 const id = process.argv[2]
-const key = execFileSync('powershell.exe', ['-NoProfile', '-Command',
-  "[Environment]::GetEnvironmentVariable('N8N_API_KEY','User')"], { encoding: 'utf8' }).trim()
+const key = process.env.N8N_API_KEY || (process.platform === 'win32'
+  ? execFileSync('powershell.exe', ['-NoProfile', '-Command',
+    "[Environment]::GetEnvironmentVariable('N8N_API_KEY','User')"], { encoding: 'utf8' }).trim()
+  : '')
+if (!id || !key || !urlHttpValida(base)) throw new Error('uso: N8N_API_KEY=... npm run diag -- ID')
 
 const h = { 'X-N8N-API-KEY': key, accept: 'application/json' }
 
 const wfMeta = async (wid) => {
   const r = await fetch(`${base}/api/v1/workflows/${wid}`, { headers: h })
+  if (!r.ok) throw new Error(`n8n respondeu HTTP ${r.status}`)
   return r.json()
 }
 
 const r = await fetch(`${base}/api/v1/executions/${id}?includeData=true`, { headers: h })
+if (!r.ok) throw new Error(`n8n respondeu HTTP ${r.status}`)
 const txt = await r.text()
 console.log(`bytes recebidos: ${(txt.length / 1048576).toFixed(1)} MB`)
 const e = JSON.parse(txt)
@@ -25,7 +31,7 @@ console.log(`workflowId=${e.workflowId}`)
 const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
 const rd = d?.resultData
 console.log(`lastNodeExecuted=${rd?.lastNodeExecuted}`)
-console.log(`erro no resultData: ${rd?.error ? (rd.error.message || rd.error.name) : 'nenhum'}`)
+console.log(`erro no resultData: ${rd?.error ? redigirTexto(rd.error.message || rd.error.name) : 'nenhum'}`)
 
 const linhas = []
 for (const [no, runs] of Object.entries(rd?.runData || {})) {
@@ -56,6 +62,6 @@ console.log(`waitingExecution: ${Object.keys(esperando).length} chave(s)`)
 
 const wf = await wfMeta(e.workflowId)
 console.log(`\nfluxo: ${wf.name} | ativo=${wf.active}`)
-console.log(`settings: ${JSON.stringify(wf.settings)}`)
+console.log(`settings: ${JSON.stringify(redigir(wf.settings))}`)
 const loops = (wf.nodes || []).filter((n) => /splitInBatches|itemLists|loop/i.test(n.type))
-console.log(`nos de loop: ${loops.map((n) => `${n.name} (${n.type}) opts=${JSON.stringify(n.parameters)}`).join(' ; ') || 'nenhum'}`)
+console.log(`nos de loop: ${loops.map((n) => `${n.name} (${n.type}) opts=${JSON.stringify(redigir(n.parameters))}`).join(' ; ') || 'nenhum'}`)

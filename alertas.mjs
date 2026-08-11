@@ -109,3 +109,17 @@ export function montarAlertas(estado = {}, cron = {}, uptime = {}) {
 export function assinaturaAlerta(a) {
   return `${a.nivel}|${Number(a.magnitude || 1)}`
 }
+
+export function podeConfirmarRecuperacao(item = {}, estado = {}, uptime = {}) {
+  const chave = String(item.chave || '')
+  const origem = item.origem || (chave.startsWith('kuma:') ? 'uptime-kuma'
+    : chave.startsWith('tls:') ? 'tls'
+      : chave.startsWith('dominio:') ? 'rdap' : 'n8n')
+
+  if (['uptime-kuma', 'tls', 'rdap'].includes(origem)) return uptime.ok === true
+
+  const instanciaId = item.instanciaId
+    || (/^(?:instancia|erro|travada|cron):([^:]+)/.exec(chave)?.[1])
+  if (!instanciaId) return false
+  return (estado.instancias || []).some((instancia) => instancia.id === instanciaId && instancia.alcancavel === true)
+}

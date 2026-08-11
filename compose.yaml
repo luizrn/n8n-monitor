@@ -2,11 +2,19 @@ services:
   monitor:
     build: .
     image: n8n-monitor:local
+    init: true
     restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "127.0.0.1:8787:8787"
     volumes:
       - n8n-monitor-data:/data
+    tmpfs:
+      - /tmp:size=16m,mode=1777
     environment:
       TZ: America/Cuiaba
 

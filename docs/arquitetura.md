@@ -49,7 +49,9 @@ O diretório é `N8N_MONITOR_DATA_DIR`, `%LOCALAPPDATA%\n8n-monitor` ou `$HOME/n
 | `tarefas.json` | tarefas e histórico de transições |
 | `webhook-estado.json` | assinaturas entregues e último resultado por destino externo |
 
-Segredos nunca aparecem em `GET /api/config`: são substituídos por marcadores como `temChave`, `temToken`, `temBearer`, `temHeaderValor`, `temEvolutionApiKey` e `temDiscordUrl`.
+Todos os arquivos são substituídos atomicamente e recebem permissão `0600`; registros persistidos usam objetos sem protótipo para impedir chaves perigosas. Segredos e o caminho local nunca aparecem em `GET /api/config`: são substituídos por marcadores como `temChave`, `temToken`, `temUrl`, `temBearer`, `temHeaderValor`, `temEvolutionApiKey` e `temDiscordUrl`.
+
+Reconhecimentos e tarefas ausentes só são resolvidos quando sua fonte respondeu com sucesso no ciclo atual. Uma instância n8n inalcançável ou uma coleta Kuma com falha preserva o estado anterior em vez de produzir uma recuperação falsa.
 
 `public/i18n.js` centraliza o catálogo `pt-BR`/`en`, aplica traduções a conteúdo estático e dinâmico e fornece o locale de datas e números. O servidor valida e persiste apenas esses dois códigos de idioma.
 
