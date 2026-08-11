@@ -63,6 +63,8 @@ window.I18n = (() => {
     'Ligado': 'Up', 'Desligado': 'Down', 'Manutenção': 'Maintenance', 'Desconhecido': 'Unknown', 'Pausado': 'Paused',
     'Integração desativada.': 'Integration disabled.', 'Sem dados do Uptime Kuma.': 'No Uptime Kuma data.',
     'Nenhum problema ativo.': 'No active problems.', 'Nada em execução agora.': 'Nothing running now.',
+    '1 instância n8n conectada': '1 connected n8n instance', 'Nenhuma instância n8n conectada': 'No connected n8n instances',
+    'Uptime Kuma indisponível': 'Uptime Kuma unavailable',
     'Sem dados.': 'No data.', 'No Monitor': 'In Monitor', 'Fora do Monitor': 'Outside Monitor',
     'Nenhum monitor encontrado.': 'No monitors found.', 'Carregando monitores…': 'Loading monitors…',
     'Não foi possível carregar os monitores.': 'Could not load monitors.',
@@ -94,6 +96,8 @@ window.I18n = (() => {
 
   const padroes = [
     [/^(\d+) item\(ns\)$/, '$1 item(s)'],
+    [/^(\d+) instâncias n8n conectadas$/, '$1 connected n8n instances'],
+    [/^Uptime Kuma \((\d+) monitores\)$/, 'Uptime Kuma ($1 monitors)'],
     [/^Dados protegidos em (.*)$/, 'Protected data at $1'],
     [/^Não foi possível salvar: (.*)$/, 'Could not save: $1'],
     [/^(\d+) tarefa\(s\) · (\d+) aberta\(s\)$/, '$1 task(s) · $2 open'],
