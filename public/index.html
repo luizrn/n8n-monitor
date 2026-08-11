@@ -130,7 +130,26 @@ $('#btAddInst').onclick=()=>$('#instancias').appendChild(instRow({nome:`n8n ${$(
 $('#btTestKuma').onclick=()=>carregarMonitoresKuma(selecaoMonitores())
 $('#kAtivo').onchange=estadoKumaAtivo
 $('#btAddDestino').onclick=()=>$('#wDestinos').appendChild(destinoRow({ativo:false,modo:'webhook'}))
-$('#btSalvar').onclick=async()=>{const botao=$('#btSalvar'),status=$('#salvarStatus'),mon={};document.querySelectorAll('[data-mid]').forEach(x=>mon[x.dataset.mid]=x.checked);const corpo={tema:document.querySelector('#tema').value,idioma:$('#idioma').value,instancias:[...$('#instancias').children].map(lerInst),notificacoes:{toastSeg:Number($('#toastSeg').value),navegador:$('#notifNav').checked,som:$('#notifSom').checked,volume:Number($('#volume').value)},uptimeKuma:{ativo:$('#kAtivo').checked,baseUrl:$('#kUrl').value,token:$('#kToken').value,slug:$('#kSlug').value,avisarCertDias:Number($('#kDias').value),monitores:mon},webhook:{destinos:[...$('#wDestinos').children].map(lerDestino)}};botao.disabled=true;botao.textContent='Salvando…';status.textContent='';try{const r=await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(corpo)});if(!r.ok)throw new Error(`HTTP ${r.status}`);const confirmada=await(await fetch('/api/config',{cache:'no-store'})).json();if(confirmada.tema!==corpo.tema||confirmada.idioma!==corpo.idioma||confirmada.uptimeKuma.ativo!==corpo.uptimeKuma.ativo||confirmada.webhook.destinos.length!==corpo.webhook.destinos.length)throw new Error('a configuração não foi persistida');I18n.definir(confirmada.idioma);Theme.definir(confirmada.tema);Toaster.configurar(corpo.notificacoes);$('#dlgConfig').close();await puxar(true)}catch(e){status.textContent=`Não foi possível salvar: ${e.message}`;status.style.color='var(--ruim)'}finally{botao.disabled=false;botao.textContent='Salvar'}}
+$('#btSalvar').onclick=async()=>{
+  const botao=$('#btSalvar'),status=$('#salvarStatus'),mon={},temaAnterior=Theme.atual()
+  document.querySelectorAll('[data-mid]').forEach(x=>mon[x.dataset.mid]=x.checked)
+  const corpo={tema:$('#tema').value,idioma:$('#idioma').value,instancias:[...$('#instancias').children].map(lerInst),notificacoes:{toastSeg:Number($('#toastSeg').value),navegador:$('#notifNav').checked,som:$('#notifSom').checked,volume:Number($('#volume').value)},uptimeKuma:{ativo:$('#kAtivo').checked,baseUrl:$('#kUrl').value,token:$('#kToken').value,slug:$('#kSlug').value,avisarCertDias:Number($('#kDias').value),monitores:mon},webhook:{destinos:[...$('#wDestinos').children].map(lerDestino)}}
+  const controlador=new AbortController(),timer=setTimeout(()=>controlador.abort(),15000)
+  botao.disabled=true;botao.textContent='Salvando…';status.textContent='';Theme.definir(corpo.tema)
+  try{
+    const r=await fetch('/api/config',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(corpo),signal:controlador.signal})
+    const resposta=await r.json().catch(()=>({}))
+    if(!r.ok||resposta.salvo!==true)throw new Error(resposta.erro||`HTTP ${r.status}`)
+    I18n.definir(corpo.idioma);Toaster.configurar(corpo.notificacoes);$('#dlgConfig').close()
+    setTimeout(()=>puxar(true),0)
+  }catch(e){
+    Theme.definir(temaAnterior)
+    status.textContent=e.name==='AbortError'?'Não foi possível salvar: tempo limite excedido':`Não foi possível salvar: ${e.message}`
+    status.style.color='var(--ruim)'
+  }finally{
+    clearTimeout(timer);botao.disabled=false;botao.textContent='Salvar'
+  }
+}
 $('#btConfig').onclick=abrirConfig;$('#btFecharConfig').onclick=()=>$('#dlgConfig').close();$('#btN8nDetalhes').onclick=()=>location.href='/logs';$('#btUptime').onclick=()=>$('#dlgUptime').showModal();$('#btCron').onclick=()=>$('#dlgCron').showModal();$('#btPausa').onclick=ev=>{pausado=!pausado;ev.target.textContent=pausado?'Retomar':'Pausar';if(!pausado)puxar()}
 setInterval(()=>document.querySelectorAll('[data-inicio]').forEach(e=>e.textContent=dur((Date.now()-new Date(e.dataset.inicio))/60000)),1000)
 fetch('/api/config').then(r=>r.json()).then(c=>Toaster.configurar(c.notificacoes));puxar();setInterval(puxar,10000)
