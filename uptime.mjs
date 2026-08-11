@@ -73,6 +73,8 @@ export function lerMetrics(texto) {
     if (!metrica.startsWith('monitor_')) continue
 
     const rot = lerRotulos(rotulosCrus)
+    // Grupos organizam a interface do Kuma, mas nao sao servicos monitorados.
+    if (rot.monitor_type === 'group') continue
     const nome = rot.monitor_name
     if (!nome) continue
     const id = rot.monitor_id || null

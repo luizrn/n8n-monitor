@@ -16,6 +16,18 @@ test('le id, status, resposta, TLS e uptime 24h do Prometheus', () => {
   )
 })
 
+test('ignora grupos do Uptime Kuma', () => {
+  const grupo = 'monitor_name="Ferramentas Internas",monitor_type="group",monitor_url="https://"'
+  const servico = 'monitor_id="7",monitor_name="API",monitor_type="http",monitor_url="https://api.example.com"'
+  const itens = lerMetrics([
+    `monitor_status{${grupo}} 0`,
+    `monitor_response_time{${grupo}} -1`,
+    `monitor_status{${servico}} 1`,
+  ].join('\n'))
+
+  assert.deepEqual(itens.map((m) => m.nome), ['API'])
+})
+
 test('mapeia estados Kuma', () => {
   assert.equal(situacaoDe({ status: 0 }), 'desligado')
   assert.equal(situacaoDe({ status: 2 }), 'desconhecido')
