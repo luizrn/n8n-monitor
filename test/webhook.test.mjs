@@ -5,12 +5,74 @@ import { criarDispatcherWebhook, payloadDe, prepararEnvio } from '../webhook.mjs
 test('envia abertura, ignora estabilidade, envia piora e resolucao', async () => {
   let disco = '{}'; const eventos = []
   const fetchFn = async (_url, op) => { eventos.push(JSON.parse(op.body)); return { ok: true, status: 204 } }
-  const d = criarDispatcherWebhook({ ler: async () => disco, gravar: async (x) => { disco = x }, obterConfig: () => ({ ativo: true, url: 'https://hook' }), fetchFn })
+  const d = criarDispatcherWebhook({ ler: async () => disco, gravar: async (x) => { disco = x }, obterConfig: () => ({ destinos: [{ id: 'hook', ativo: true, modo: 'webhook', url: 'https://hook' }] }), fetchFn })
   await d.carregar()
   const a = { chave: 'x', nivel: 'ruim', origem: 'n8n', tipo: 'erro', titulo: 'Fluxo', resumo: 'falhou', magnitude: 1 }
   await d.processar([a]); await d.processar([a]); await d.processar([{ ...a, magnitude: 2 }]); await d.processar([])
   assert.deepEqual(eventos.map((e) => e.event), ['opened', 'worsened', 'resolved'])
   assert.ok(!JSON.stringify(eventos).includes('bearer'))
+})
+
+test('entrega em varios destinos ativos com deduplicacao independente', async () => {
+  let disco = '{}'; const chamadas = []
+  const destinos = [
+    { id: 'hook', ativo: true, modo: 'webhook', url: 'https://hook' },
+    { id: 'discord', ativo: true, modo: 'discord', discordUrl: 'https://discord.com/api/webhooks/1/token' },
+    { id: 'inativo', ativo: false, modo: 'webhook', url: 'https://inativo' },
+  ]
+  const fetchFn = async (url, op) => { chamadas.push({ url, body: JSON.parse(op.body) }); return { ok: true, status: 204 } }
+  const d = criarDispatcherWebhook({ ler: async () => disco, gravar: async (x) => { disco = x }, obterConfig: () => ({ destinos }), fetchFn })
+  const alerta = { chave: 'x', nivel: 'ruim', origem: 'n8n', tipo: 'erro', titulo: 'Fluxo', resumo: 'falhou', magnitude: 1 }
+
+  await d.carregar()
+  await d.processar([alerta])
+  await d.processar([alerta])
+
+  assert.equal(chamadas.length, 2)
+  assert.ok(chamadas.some((c) => c.url === 'https://hook'))
+  assert.ok(chamadas.some((c) => c.url.startsWith('https://discord.com/')))
+  assert.ok(!chamadas.some((c) => c.url === 'https://inativo'))
+  assert.deepEqual(Object.keys(JSON.parse(disco).destinos).sort(), ['discord', 'hook'])
+})
+
+test('migra estado legado para o primeiro destino sem reenviar alerta estavel', async () => {
+  const alerta = { chave: 'x', nivel: 'ruim', origem: 'n8n', tipo: 'erro', titulo: 'Fluxo', resumo: 'falhou', magnitude: 1 }
+  let disco = JSON.stringify({ ativos: { x: { assinatura: 'ruim|1', alerta } }, ultimo: { ok: true, detalhe: 'opened: x' } })
+  const chamadas = []
+  const d = criarDispatcherWebhook({
+    ler: async () => disco,
+    gravar: async (x) => { disco = x },
+    obterConfig: () => ({ destinos: [{ id: 'migrado', ativo: true, modo: 'webhook', url: 'https://hook' }] }),
+    fetchFn: async (...args) => { chamadas.push(args); return { ok: true, status: 204 } },
+  })
+
+  await d.carregar()
+  await d.processar([alerta])
+
+  assert.equal(chamadas.length, 0)
+  assert.equal(d.status('migrado').detalhe, 'opened: x')
+})
+
+test('reativacao envia uma vez os alertas que continuam abertos', async () => {
+  let disco = '{}'; const eventos = []
+  const cfg = { id: 'hook', ativo: true, modo: 'webhook', url: 'https://hook' }
+  const alerta = { chave: 'x', nivel: 'ruim', origem: 'n8n', tipo: 'erro', titulo: 'Fluxo', resumo: 'falhou', magnitude: 1 }
+  const d = criarDispatcherWebhook({
+    ler: async () => disco,
+    gravar: async (x) => { disco = x },
+    obterConfig: () => ({ destinos: [cfg] }),
+    fetchFn: async (_url, op) => { eventos.push(JSON.parse(op.body)); return { ok: true, status: 204 } },
+  })
+
+  await d.carregar()
+  await d.processar([alerta])
+  cfg.ativo = false
+  await d.processar([alerta])
+  cfg.ativo = true
+  await d.processar([alerta])
+  await d.processar([alerta])
+
+  assert.deepEqual(eventos.map((e) => e.event), ['opened', 'opened'])
 })
 
 test('prepara webhook com metodo, bearer e header opcional', () => {

@@ -25,7 +25,7 @@ Node.js puro, sem dependências npm, framework ou etapa de build.
 | 🔎 | Logs | Busca e filtros por status, modo, período e instância, com diagnóstico redigido. |
 | 🔔 | Notificação do navegador | Avisa mudanças amarelas e vermelhas quando o Monitor está aberto em segundo plano. |
 | 🔊 | Som | Toca apenas em alerta vermelho, com volume, teste e cooldown anti-spam. |
-| 🪝 | Canais externos | Envia abertura, agravamento e resolução por webhook HTTP, WhatsApp/Evolution API ou Discord. |
+| 🪝 | Canais externos | Envia abertura, agravamento e resolução simultaneamente para múltiplos Webhooks HTTP, WhatsApp/Evolution API e Discord. |
 | 🟢 | Uptime Kuma | Exibe status, resposta, uptime, manutenção, pausa e monitores selecionáveis. |
 | 🔐 | TLS | Avisa certificado próximo do vencimento, expirado ou inválido. |
 | 🌐 | Domínios | Consulta expiração por RDAP e ignora TLDs sem fonte confiável. |
@@ -68,7 +68,7 @@ As quatro abas ficam no Monitor:
 - **Instâncias n8n:** nome, URL, API key, ativação e teste individual.
 - **Notificações:** duração do toast de 0 a 600 segundos, navegador, som e volume.
 - **Uptime Kuma:** URL, API key, slug público opcional, antecedência e seleção de monitores.
-- **Webhook:** modo Webhook HTTP, WhatsApp/Evolution API ou Discord, com ativação e envio de teste. O modo HTTP aceita `POST`, `PUT` ou `PATCH`, Bearer e um header adicional opcional.
+- **Webhook:** lista de destinos Webhook HTTP, WhatsApp/Evolution API e Discord, cada um com nome, ativação, credenciais, teste e último resultado próprios. Vários destinos podem operar simultaneamente. O modo HTTP aceita `POST`, `PUT` ou `PATCH`, Bearer e um header adicional opcional.
 
 Campos secretos sempre chegam vazios ao navegador. Deixá-los vazios ao salvar preserva o valor atual.
 
@@ -98,7 +98,7 @@ Dados ficam em `%LOCALAPPDATA%\n8n-monitor` no Windows, `$HOME/n8n-monitor` em o
 
 Cada problema possui uma chave estável. Toast, notificação do navegador e som são emitidos uma única vez enquanto essa chave estiver ativa, mesmo que a magnitude aumente ou a página seja recarregada. Quando o problema desaparece, a chave é liberada e uma recorrência futura pode avisar novamente. **Em análise** move o item para Tarefas e o remove do Monitor; **Resolvido** reconhece a magnitude atual.
 
-O webhook mantém uma máquina de estados própria e envia `opened`, `worsened` e `resolved`. Consulte [docs/arquitetura.md](docs/arquitetura.md) para o schema.
+Cada destino externo mantém uma máquina de estados própria e recebe `opened`, `worsened` e `resolved`. Consulte [docs/arquitetura.md](docs/arquitetura.md) para o schema.
 
 ## Desenvolvimento
 

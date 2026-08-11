@@ -49,7 +49,9 @@ const UPTIME_PADRAO = {
   avisarCertDias: 21,
 }
 
-const WEBHOOK_PADRAO = {
+const DESTINO_PADRAO = {
+  id: '',
+  nome: '',
   ativo: false,
   modo: 'webhook',
   url: '',
@@ -64,6 +66,8 @@ const WEBHOOK_PADRAO = {
   discordUrl: '',
   discordNome: 'n8n-monitor',
 }
+
+const WEBHOOK_PADRAO = { destinos: [] }
 
 const PADRAO = {
   instancias: [],
@@ -107,6 +111,41 @@ function saneaInstancia(cru, i) {
   }
 }
 
+function saneaDestino(cru, i) {
+  const modo = ['webhook', 'evolution', 'discord'].includes(cru?.modo) ? cru.modo : 'webhook'
+  const nomePadrao = { webhook: 'Webhook HTTP', evolution: 'WhatsApp', discord: 'Discord' }[modo]
+  return {
+    ...DESTINO_PADRAO,
+    id: String(cru?.id || '').trim() || `destino-${i + 1}`,
+    nome: String(cru?.nome || '').trim() || nomePadrao,
+    ativo: cru?.ativo === true,
+    modo,
+    url: String(cru?.url || '').trim(),
+    metodo: ['POST', 'PUT', 'PATCH'].includes(cru?.metodo) ? cru.metodo : 'POST',
+    bearer: String(cru?.bearer || '').trim(),
+    headerNome: String(cru?.headerNome || '').trim(),
+    headerValor: String(cru?.headerValor || '').trim(),
+    evolutionUrl: String(cru?.evolutionUrl || '').trim().replace(/\/+$/, ''),
+    evolutionInstancia: String(cru?.evolutionInstancia || '').trim(),
+    evolutionApiKey: String(cru?.evolutionApiKey || '').trim(),
+    evolutionNumero: String(cru?.evolutionNumero || '').replace(/\D/g, ''),
+    discordUrl: String(cru?.discordUrl || '').trim(),
+    discordNome: String(cru?.discordNome || 'n8n-monitor').trim().slice(0, 80),
+  }
+}
+
+function idsUnicos(itens) {
+  const vistos = new Set()
+  for (const item of itens) {
+    const base = item.id
+    let id = base, n = 2
+    while (vistos.has(id)) id = `${base}-${n++}`
+    item.id = id
+    vistos.add(id)
+  }
+  return itens
+}
+
 // MIGRACAO. A primeira versao guardava uma instancia unica em `baseUrl`/`apiKey`
 // na raiz da config. Ler isso e converter em lista e o que evita que quem ja
 // usava o painel perca a configuracao ao atualizar.
@@ -114,9 +153,11 @@ function migrar(cru) {
   const c = { ...PADRAO, ...cru }
   c.notificacoes = { ...NOTIF_PADRAO, ...(cru?.notificacoes || {}) }
   c.uptimeKuma = { ...UPTIME_PADRAO, ...(cru?.uptimeKuma || {}) }
-  c.webhook = { ...WEBHOOK_PADRAO, ...(cru?.webhook || {}) }
-  if (!['webhook', 'evolution', 'discord'].includes(c.webhook.modo)) c.webhook.modo = 'webhook'
-  if (!['POST', 'PUT', 'PATCH'].includes(c.webhook.metodo)) c.webhook.metodo = 'POST'
+  const webhookCru = cru?.webhook
+  const destinosCrus = Array.isArray(webhookCru?.destinos)
+    ? webhookCru.destinos
+    : (webhookCru && typeof webhookCru === 'object' ? [{ ...webhookCru, id: 'destino-1' }] : [])
+  c.webhook = { destinos: idsUnicos(destinosCrus.map(saneaDestino)) }
 
   if (!Array.isArray(c.instancias) || !c.instancias.length) {
     const url = String(cru?.baseUrl || process.env.N8N_BASE_URL || '').trim()
@@ -175,6 +216,16 @@ const instanciaPorId = (id) => config.instancias.find((i) => i.id === id) || nul
 // Instancia publicavel: tudo menos o segredo.
 const publica = (i) => ({
   id: i.id, nome: i.nome, baseUrl: i.baseUrl, ativo: i.ativo, temChave: Boolean(i.apiKey),
+})
+
+const publicaDestino = (d) => ({
+  id: d.id, nome: d.nome, ativo: d.ativo, modo: d.modo,
+  url: d.url, metodo: d.metodo, temBearer: Boolean(d.bearer),
+  headerNome: d.headerNome, temHeaderValor: Boolean(d.headerValor),
+  evolutionUrl: d.evolutionUrl, evolutionInstancia: d.evolutionInstancia,
+  evolutionNumero: d.evolutionNumero, temEvolutionApiKey: Boolean(d.evolutionApiKey),
+  temDiscordUrl: Boolean(d.discordUrl), discordNome: d.discordNome,
+  ultimo: webhook.status(d.id),
 })
 
 // ------------------------------------------- reconhecimento de alertas
@@ -780,20 +831,7 @@ const servidor = createServer(async (req, res) => {
           temToken: Boolean(uk.token), monitores: uk.monitores,
           avisarCertDias: uk.avisarCertDias,
         },
-        webhook: {
-          ativo: config.webhook.ativo, modo: config.webhook.modo,
-          url: config.webhook.url, metodo: config.webhook.metodo,
-          temBearer: Boolean(config.webhook.bearer),
-          headerNome: config.webhook.headerNome,
-          temHeaderValor: Boolean(config.webhook.headerValor),
-          evolutionUrl: config.webhook.evolutionUrl,
-          evolutionInstancia: config.webhook.evolutionInstancia,
-          evolutionNumero: config.webhook.evolutionNumero,
-          temEvolutionApiKey: Boolean(config.webhook.evolutionApiKey),
-          temDiscordUrl: Boolean(config.webhook.discordUrl),
-          discordNome: config.webhook.discordNome,
-          ultimo: webhook.status(),
-        },
+        webhook: { destinos: config.webhook.destinos.map(publicaDestino) },
       })
     }
 
@@ -847,21 +885,18 @@ const servidor = createServer(async (req, res) => {
 
       if (corpo.webhook && typeof corpo.webhook === 'object') {
         const w = corpo.webhook
-        const atual = config.webhook
-        config.webhook = {
-          ativo: typeof w.ativo === 'boolean' ? w.ativo : atual.ativo,
-          modo: ['webhook', 'evolution', 'discord'].includes(w.modo) ? w.modo : atual.modo,
-          url: typeof w.url === 'string' ? w.url.trim() : atual.url,
-          metodo: ['POST', 'PUT', 'PATCH'].includes(w.metodo) ? w.metodo : atual.metodo,
-          bearer: typeof w.bearer === 'string' && w.bearer.trim() ? w.bearer.trim() : atual.bearer,
-          headerNome: typeof w.headerNome === 'string' ? w.headerNome.trim() : atual.headerNome,
-          headerValor: typeof w.headerValor === 'string' && w.headerValor.trim() ? w.headerValor.trim() : atual.headerValor,
-          evolutionUrl: typeof w.evolutionUrl === 'string' ? w.evolutionUrl.trim().replace(/\/+$/, '') : atual.evolutionUrl,
-          evolutionInstancia: typeof w.evolutionInstancia === 'string' ? w.evolutionInstancia.trim() : atual.evolutionInstancia,
-          evolutionApiKey: typeof w.evolutionApiKey === 'string' && w.evolutionApiKey.trim() ? w.evolutionApiKey.trim() : atual.evolutionApiKey,
-          evolutionNumero: typeof w.evolutionNumero === 'string' ? w.evolutionNumero.replace(/\D/g, '') : atual.evolutionNumero,
-          discordUrl: typeof w.discordUrl === 'string' && w.discordUrl.trim() ? w.discordUrl.trim() : atual.discordUrl,
-          discordNome: typeof w.discordNome === 'string' ? w.discordNome.trim().slice(0, 80) : atual.discordNome,
+        if (Array.isArray(w.destinos)) {
+          const antigos = new Map(config.webhook.destinos.map((d) => [d.id, d]))
+          config.webhook = { destinos: idsUnicos(w.destinos.map((cru, i) => {
+            const anterior = antigos.get(String(cru?.id || '').trim()) || {}
+            return saneaDestino({
+              ...anterior, ...cru,
+              bearer: String(cru?.bearer || '').trim() || anterior.bearer,
+              headerValor: String(cru?.headerValor || '').trim() || anterior.headerValor,
+              evolutionApiKey: String(cru?.evolutionApiKey || '').trim() || anterior.evolutionApiKey,
+              discordUrl: String(cru?.discordUrl || '').trim() || anterior.discordUrl,
+            }, i)
+          })) }
         }
       }
 
@@ -918,21 +953,14 @@ const servidor = createServer(async (req, res) => {
 
     if (url.pathname === '/api/webhook/teste' && req.method === 'POST') {
       const c = await lerCorpo(req)
-      const cfg = {
-        ...config.webhook,
-        modo: ['webhook', 'evolution', 'discord'].includes(c.modo) ? c.modo : config.webhook.modo,
-        url: String(c.url || config.webhook.url || '').trim(),
-        metodo: ['POST', 'PUT', 'PATCH'].includes(c.metodo) ? c.metodo : config.webhook.metodo,
-        bearer: String(c.bearer || '').trim() || config.webhook.bearer,
-        headerNome: String(c.headerNome ?? config.webhook.headerNome ?? '').trim(),
-        headerValor: String(c.headerValor || '').trim() || config.webhook.headerValor,
-        evolutionUrl: String(c.evolutionUrl || config.webhook.evolutionUrl || '').trim().replace(/\/+$/, ''),
-        evolutionInstancia: String(c.evolutionInstancia || config.webhook.evolutionInstancia || '').trim(),
-        evolutionApiKey: String(c.evolutionApiKey || '').trim() || config.webhook.evolutionApiKey,
-        evolutionNumero: String(c.evolutionNumero || config.webhook.evolutionNumero || '').replace(/\D/g, ''),
-        discordUrl: String(c.discordUrl || '').trim() || config.webhook.discordUrl,
-        discordNome: String(c.discordNome ?? config.webhook.discordNome ?? 'n8n-monitor').trim().slice(0, 80),
-      }
+      const anterior = config.webhook.destinos.find((d) => d.id === c.id) || {}
+      const cfg = saneaDestino({
+        ...anterior, ...c,
+        bearer: String(c.bearer || '').trim() || anterior.bearer,
+        headerValor: String(c.headerValor || '').trim() || anterior.headerValor,
+        evolutionApiKey: String(c.evolutionApiKey || '').trim() || anterior.evolutionApiKey,
+        discordUrl: String(c.discordUrl || '').trim() || anterior.discordUrl,
+      }, 0)
       return json(res, 200, await webhook.testar(cfg))
     }
 

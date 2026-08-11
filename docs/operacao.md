@@ -48,15 +48,15 @@ A permissão do navegador é pedida ao ativar a opção. Se ela foi negada perma
 
 ## Canais externos
 
-Em **Configurações > Webhook**, escolha um modo:
+Em **Configurações > Webhook**, adicione um ou mais destinos. Cada item possui nome, modo, switch, credenciais, botão de teste e último resultado independentes. Destinos ativos recebem o mesmo ciclo de eventos simultaneamente; um destino desativado deixa de receber sem afetar os demais. Ao reativá-lo, alertas ainda abertos são enviados uma vez.
 
 - **Webhook HTTP:** informe URL e método (`POST`, `PUT` ou `PATCH`). Bearer e um par nome/valor de header são opcionais.
 - **WhatsApp (Evolution API):** informe URL base, nome da instância, API key e número com país e DDD. O painel usa o endpoint oficial `/message/sendText/{instanceName}`.
 - **Discord:** informe a URL de webhook do canal e, opcionalmente, o nome exibido.
 
-Use **Enviar teste** antes de ativar. O destino deve responder HTTP 2xx em até 10 segundos.
+Use **Enviar teste** em cada item antes de ativá-lo. O destino deve responder HTTP 2xx em até 10 segundos. Remover um item apaga sua configuração no próximo salvamento; deixar um campo secreto vazio preserva o valor daquele destino.
 
-Em falha, confira o último resultado na própria aba, logs do processo, DNS, certificado do destino e regras de proxy/firewall. Campos secretos vazios mantêm o valor salvo. O estado persistido impede reenvio de eventos já aceitos.
+Em falha, confira o resultado do item, logs do processo, DNS, certificado do destino e regras de proxy/firewall. Cada destino mantém deduplicação própria: a falha de um canal não faz outro repetir eventos já aceitos.
 
 ## Backup
 
