@@ -2,6 +2,54 @@ import { randomUUID } from 'node:crypto'
 import { assinaturaAlerta } from './alertas.mjs'
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+const METODOS = new Set(['POST', 'PUT', 'PATCH'])
+
+function textoEvento(payload) {
+  const a = payload.alert
+  const evento = { opened: 'ABERTO', worsened: 'AGRAVADO', resolved: 'RESOLVIDO', test: 'TESTE' }[payload.event] || payload.event.toUpperCase()
+  return [
+    `*${evento}* | ${a.severity === 'red' ? 'VERMELHO' : 'AMARELO'}`,
+    a.title,
+    a.summary || a.detail,
+    a.instance?.name ? `Instância: ${a.instance.name}` : null,
+    a.magnitude > 1 ? `Ocorrências: ${a.magnitude}` : null,
+    a.url || null,
+  ].filter(Boolean).join('\n').slice(0, 4000)
+}
+
+export function prepararEnvio(payload, cfg = {}) {
+  const modo = cfg.modo || 'webhook'
+  if (modo === 'discord') {
+    if (!cfg.discordUrl) throw new Error('URL do webhook Discord não configurada')
+    const url = new URL(cfg.discordUrl)
+    url.searchParams.set('wait', 'true')
+    return {
+      url: url.toString(), method: 'POST',
+      headers: { 'content-type': 'application/json', 'user-agent': 'n8n-monitor/1.0' },
+      body: { content: textoEvento(payload).slice(0, 2000), username: cfg.discordNome || 'n8n-monitor', allowed_mentions: { parse: [] } },
+    }
+  }
+  if (modo === 'evolution') {
+    if (!cfg.evolutionUrl || !cfg.evolutionInstancia || !cfg.evolutionApiKey || !cfg.evolutionNumero) {
+      throw new Error('URL, instância, API key e número da Evolution API são obrigatórios')
+    }
+    return {
+      url: `${cfg.evolutionUrl.replace(/\/+$/, '')}/message/sendText/${encodeURIComponent(cfg.evolutionInstancia)}`,
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'user-agent': 'n8n-monitor/1.0', apikey: cfg.evolutionApiKey },
+      body: { number: String(cfg.evolutionNumero).replace(/\D/g, ''), textMessage: { text: textoEvento(payload) } },
+    }
+  }
+  if (!cfg.url) throw new Error('URL do webhook não configurada')
+  const headers = { 'content-type': 'application/json', 'user-agent': 'n8n-monitor/1.0' }
+  if (cfg.bearer) headers.authorization = `Bearer ${cfg.bearer}`
+  if (cfg.headerNome) {
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(cfg.headerNome)) throw new Error('Nome do header opcional inválido')
+    if (cfg.headerNome.toLowerCase() === 'content-type') throw new Error('Content-Type é definido automaticamente')
+    headers[cfg.headerNome] = cfg.headerValor || ''
+  }
+  return { url: cfg.url, method: METODOS.has(cfg.metodo) ? cfg.metodo : 'POST', headers, body: payload }
+}
 
 export function payloadDe(evento, alerta, resolucao = null) {
   return {
@@ -31,15 +79,13 @@ export function criarDispatcherWebhook({ ler, gravar, obterConfig, fetchFn = fet
   }
 
   async function enviar(payload, cfg = obterConfig()) {
-    if (!cfg?.url) throw new Error('URL não configurada')
     let ultimoErro
     for (let tentativa = 0; tentativa < 3; tentativa++) {
       const ctrl = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), 10000)
       try {
-        const headers = { 'content-type': 'application/json', 'user-agent': 'n8n-monitor/1.0' }
-        if (cfg.bearer) headers.authorization = `Bearer ${cfg.bearer}`
-        const r = await fetchFn(cfg.url, { method: 'POST', headers, body: JSON.stringify(payload), signal: ctrl.signal })
+        const envio = prepararEnvio(payload, cfg)
+        const r = await fetchFn(envio.url, { method: envio.method, headers: envio.headers, body: JSON.stringify(envio.body), signal: ctrl.signal })
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return { ok: true, status: r.status }
       } catch (e) {

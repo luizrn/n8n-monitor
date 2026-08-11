@@ -47,7 +47,7 @@ O diretório é `N8N_MONITOR_DATA_DIR`, `%LOCALAPPDATA%\n8n-monitor` ou `$HOME/n
 | `tarefas.json` | tarefas e histórico de transições |
 | `webhook-estado.json` | assinaturas entregues e último resultado |
 
-Segredos nunca aparecem em `GET /api/config`: são substituídos por `temChave`, `temToken` e `temBearer`.
+Segredos nunca aparecem em `GET /api/config`: são substituídos por marcadores como `temChave`, `temToken`, `temBearer`, `temHeaderValor`, `temEvolutionApiKey` e `temDiscordUrl`.
 
 ## Contrato de alerta
 
@@ -72,9 +72,17 @@ Segredos nunca aparecem em `GET /api/config`: são substituídos por `temChave`,
 
 `nivel` usa `ruim` ou `atencao`. A assinatura anti-spam combina nível e magnitude.
 
-## Webhook
+## Canais externos
 
-Requisição `POST`, `Content-Type: application/json`, `User-Agent: n8n-monitor/1.0` e `Authorization: Bearer ...` quando configurado.
+O dispatcher mantém uma máquina de estados única e adapta cada evento ao modo configurado:
+
+| Modo | Contrato de entrega |
+|---|---|
+| Webhook HTTP | JSON público abaixo via `POST`, `PUT` ou `PATCH`; Bearer e um header adicional são opcionais |
+| WhatsApp / Evolution API | `POST /message/sendText/{instanceName}`, header `apikey` e corpo `{ number, textMessage: { text } }` |
+| Discord | execução do webhook com `wait=true`, `content`, nome configurável e menções desativadas |
+
+Todas as requisições usam `Content-Type: application/json` e `User-Agent: n8n-monitor/1.0`. O payload técnico completo abaixo é enviado somente no modo Webhook HTTP; WhatsApp e Discord recebem uma representação textual sem credenciais.
 
 ```json
 {

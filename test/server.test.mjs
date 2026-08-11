@@ -18,11 +18,17 @@ async function subir(config = {}) {
 }
 
 test('health responde e migra configuracao legada sem expor chave', async (t) => {
-  const s = await subir({ baseUrl: 'https://n8n.example.com', apiKey: 'segredo' })
+  const s = await subir({ baseUrl: 'https://n8n.example.com', apiKey: 'segredo', webhook: { bearer: 'bearer-secreto', headerValor: 'header-secreto', evolutionApiKey: 'evo-secreta', discordUrl: 'https://discord.com/api/webhooks/id/token-secreto' } })
   t.after(async () => { s.proc.kill('SIGTERM'); await rm(s.dir, { recursive: true, force: true }) })
   assert.equal((await (await fetch(`http://127.0.0.1:${s.porta}/api/health`)).json()).ok, true)
   const cfg = await (await fetch(`http://127.0.0.1:${s.porta}/api/config`)).json()
   assert.equal(cfg.instancias[0].nome, 'Principal')
   assert.equal(cfg.instancias[0].temChave, true)
-  assert.ok(!JSON.stringify(cfg).includes('segredo'))
+  const publicado = JSON.stringify(cfg)
+  assert.ok(!publicado.includes('segredo'))
+  assert.ok(!publicado.includes('token-secreto'))
+  assert.equal(cfg.webhook.temBearer, true)
+  assert.equal(cfg.webhook.temHeaderValor, true)
+  assert.equal(cfg.webhook.temEvolutionApiKey, true)
+  assert.equal(cfg.webhook.temDiscordUrl, true)
 })

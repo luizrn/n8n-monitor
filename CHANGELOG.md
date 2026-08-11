@@ -9,6 +9,6 @@ Todas as mudanças relevantes serão registradas aqui. O projeto segue [Keep a C
 - múltiplas instâncias n8n com filtros por origem;
 - integração Uptime Kuma, TLS e expiração de domínio via RDAP;
 - Tarefas em lista e Kanban com recuperação automática;
-- notificações do navegador, som e webhook contínuo;
+- notificações do navegador, som e canais contínuos por webhook HTTP, WhatsApp/Evolution API ou Discord;
 - Docker, Compose e testes automatizados locais;
 - documentação e arquivos comunitários para o projeto open source.
