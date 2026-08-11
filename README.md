@@ -34,6 +34,7 @@ Node.js puro, sem dependências npm, framework ou etapa de build.
 | 🐳 | Docker | Imagem não-root, health check, volume persistente, filesystem somente leitura e Compose preso ao loopback. |
 | 🧪 | Testes automatizados | `node:test`, smoke test do servidor e verificações de sintaxe executadas localmente. |
 | 🌍 | Interface bilíngue | Português (Brasil) e inglês em Monitor, Configurações, Tarefas, Dashboard, Logs, modais e notificações. |
+| 🌓 | Temas | Tema escuro padrão e tema claro suave, persistidos e aplicados em todas as telas. |
 
 ## Início rápido
 
@@ -68,7 +69,7 @@ Não exponha o painel diretamente à internet: ele é uma ferramenta administrat
 
 As cinco abas ficam no Monitor:
 
-- **Geral:** idioma da interface entre Português (Brasil) e inglês, persistido para todas as telas.
+- **Geral:** idioma da interface e tema claro ou escuro, persistidos para todas as telas.
 - **Instâncias n8n:** nome, URL, API key, ativação e teste individual.
 - **Notificações:** duração do toast de 0 a 600 segundos, navegador, som e volume.
 - **Uptime Kuma:** URL, API key, slug público opcional, antecedência e seleção de monitores.

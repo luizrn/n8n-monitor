@@ -34,6 +34,7 @@ Built with plain Node.js, with no npm dependencies, framework, or build step.
 | 🐳 | Docker | Non-root image, health check, persistent volume, read-only filesystem, and Compose bound to loopback. |
 | 🧪 | Automated tests | `node:test`, server smoke tests, and local syntax checks. |
 | 🌍 | Bilingual interface | Brazilian Portuguese and English across Monitor, Settings, Tasks, Dashboard, Logs, dialogs, and notifications. |
+| 🌓 | Themes | Default dark theme and a soft light theme, persisted and applied across every screen. |
 
 ## Quick Start
 
@@ -68,7 +69,7 @@ Do not expose the dashboard directly to the internet. It is an administrative to
 
 The Monitor contains five settings tabs:
 
-- **General:** switches the interface between Brazilian Portuguese and English and persists it across every screen.
+- **General:** interface language and light or dark theme, persisted across every screen.
 - **n8n Instances:** name, URL, API key, activation, and individual connection test.
 - **Notifications:** toast duration from 0 to 600 seconds, browser notifications, sound, and volume.
 - **Uptime Kuma:** URL, API key, optional public-page slug, expiration warning threshold, and monitor selection.

@@ -18,6 +18,7 @@ Todas as mudanças relevantes serão registradas aqui. O projeto segue [Keep a C
 - resumo de conexões n8n/Kuma no estado vazio e acesso direto do bloco N8N aos Logs;
 - Docker, Compose e testes automatizados locais;
 - documentação e arquivos comunitários para o projeto open source.
+- seleção persistente entre tema escuro padrão e tema claro suave.
 
 ### Alterado
 

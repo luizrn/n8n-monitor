@@ -18,6 +18,7 @@ All notable changes will be recorded here. The project follows [Keep a Changelog
 - n8n/Kuma connection summary in the empty state and direct access from the n8n panel to Logs;
 - Docker, Compose, and local automated tests;
 - documentation and community files for the open source project.
+- persistent selection between the default dark theme and a soft light theme.
 
 ### Changed
 
