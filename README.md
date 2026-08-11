@@ -1,6 +1,5 @@
 # n8n-monitor
 
-[![CI](https://github.com/luizrn/n8n-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/luizrn/n8n-monitor/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Node 20+](https://img.shields.io/badge/node-20%2B-339933.svg)](https://nodejs.org/)
 
@@ -29,7 +28,7 @@ Node.js puro, sem dependências npm, framework ou etapa de build.
 | 🔐 | TLS | Avisa certificado próximo do vencimento, expirado ou inválido. |
 | 🌐 | Domínios | Consulta expiração por RDAP e ignora TLDs sem fonte confiável. |
 | 🐳 | Docker | Imagem não-root, health check, volume persistente e Compose preso ao loopback. |
-| 🧪 | Testes e CI | `node:test`, smoke test do servidor e matriz Node 20/22. |
+| 🧪 | Testes automatizados | `node:test`, smoke test do servidor e verificações de sintaxe executadas localmente. |
 
 ## Início rápido
 
