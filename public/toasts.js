@@ -4,15 +4,13 @@
    A regra que define este módulo: um alerta por PROBLEMA, não por ocorrência.
    O painel consulta a API a cada 10s; sem acumulação, um único fluxo quebrado
    produziria seis alertas por minuto e ninguém leria nenhum. Aqui, cada problema
-   tem uma chave estável — e reaparecer não cria alerta novo:
+   tem uma chave estável, persistida no navegador:
 
      • chave inédita          -> abre
-     • mesma chave, mesma     -> ignora (nada muda na tela, nada apita)
-       magnitude
-     • mesma chave, magnitude -> atualiza o contador, reinicia o tempo e dá um
-       maior (o erro piorou)     pulso, porque a situação piorou de verdade
+     • mesma chave ativa      -> ignora, mesmo que a magnitude aumente
+     • chave desapareceu      -> libera; se retornar, abre um novo alerta
 
-   Assim o silêncio significa "estável" e o movimento significa "mudou".
+   Assim, um problema contínuo gera exatamente um aviso.
 
    Os TRÊS canais compartilham esse mesmo portão. Isso é o ponto central do
    desenho: uma notificação de sistema que repetisse a cada consulta seria
@@ -33,11 +31,24 @@ window.Toaster = (() => {
   let cfg = { toastSeg: 60, navegador: false, som: false, volume: 0.5 }
 
   const vivos = new Map()   // chave -> { el, timer, magnitude }
+  const CHAVE_AVISADOS = 'n8nmon.alertas.avisados'
+  const avisados = new Set(carregarAvisados())
   let ultimoSom = 0
   let audio = null
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+  function carregarAvisados() {
+    try {
+      const x = JSON.parse(localStorage.getItem(CHAVE_AVISADOS) || '[]')
+      return Array.isArray(x) ? x.filter((k) => typeof k === 'string') : []
+    } catch { return [] }
+  }
+
+  function salvarAvisados() {
+    try { localStorage.setItem(CHAVE_AVISADOS, JSON.stringify([...avisados])) } catch { /* armazenamento opcional */ }
+  }
 
   const raiz = document.createElement('div')
   raiz.className = 'toasts'
@@ -107,7 +118,7 @@ window.Toaster = (() => {
         // `tag` faz o sistema SUBSTITUIR a notificação anterior do mesmo
         // problema em vez de empilhar uma pilha de avisos idênticos.
         tag: a.chave,
-        renotify: true,
+        renotify: false,
         silent: true,   // o som é nosso, com cooldown próprio
       })
       n.onclick = () => { window.focus(); if (a.link) window.open(a.link, '_blank') }
@@ -157,7 +168,7 @@ window.Toaster = (() => {
    * @param {string} a.titulo     normalmente o nome do fluxo
    * @param {string} [a.det]      uma linha de contexto (aceita HTML já escapado)
    * @param {string} [a.marca]    instância de origem, exibida como etiqueta
-   * @param {number} [a.magnitude=1] quantas ocorrências; só crescer é que alerta
+   * @param {number} [a.magnitude=1] quantas ocorrências, apenas para exibição
    * @param {string} [a.link]     URL para abrir no n8n
    */
   function alertar(a) {
@@ -165,18 +176,18 @@ window.Toaster = (() => {
     const magnitude = Number(a.magnitude ?? 1)
     const existente = vivos.get(a.chave)
 
-    if (existente) {
-      if (magnitude <= existente.magnitude) return   // estável: silêncio total
+    if (avisados.has(a.chave)) {
+      // A quantidade pode subir enquanto o problema continua aberto. Atualizamos
+      // apenas o contador visível, sem prolongar, pulsar, notificar ou tocar.
+      if (!existente || magnitude <= existente.magnitude) return
       existente.magnitude = magnitude
       const vezes = existente.el.querySelector('.vezes')
       if (vezes) { vezes.textContent = '×' + magnitude; vezes.hidden = magnitude <= 1 }
-      existente.el.classList.remove('pulsou')
-      void existente.el.offsetWidth
-      existente.el.classList.add('pulsou')
-      agendar(a.chave, existente)
-      manifestar(a, magnitude)
       return
     }
+
+    avisados.add(a.chave)
+    salvarAvisados()
 
     const el = document.createElement('div')
     el.className = 'toast ' + a.nivel
@@ -215,6 +226,18 @@ window.Toaster = (() => {
     manifestar(a, magnitude)
   }
 
+  function sincronizar(chavesAtivas = []) {
+    const ativas = new Set(chavesAtivas)
+    let mudou = false
+    for (const chave of [...avisados]) {
+      if (ativas.has(chave)) continue
+      avisados.delete(chave)
+      mudou = true
+    }
+    for (const chave of [...vivos.keys()]) if (!ativas.has(chave)) fechar(chave)
+    if (mudou) salvarAvisados()
+  }
+
   // Canais externos, atravessados só quando algo mudou de verdade.
   function manifestar(a, magnitude) {
     notificar(a, magnitude)
@@ -236,7 +259,7 @@ window.Toaster = (() => {
   }
 
   return {
-    alertar, fechar, configurar, pedirPermissao,
+    alertar, fechar, sincronizar, configurar, pedirPermissao,
     testarSom: (v) => tocar(v),
     estado: () => ({ ...cfg }),
     limpar: () => { for (const k of [...vivos.keys()]) fechar(k) },
