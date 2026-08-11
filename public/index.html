@@ -69,7 +69,7 @@ body{overflow:hidden}.app{width:100%;min-width:0;height:100vh;max-width:1720px;m
     <div class="monitor-lista" id="kMonitores"></div>
   </section>
   <section class="aba" id="aba-webhook" hidden>
-    <label class="switch-line"><span>Ativar envio contínuo</span><input id="wAtivo" type="checkbox"></label>
+    <label class="switch-line"><span><b>Ativar envio contínuo</b><small class="estado-integracao">Envia automaticamente alertas abertos, agravados e resolvidos, mesmo sem o Monitor aberto.</small></span><input id="wAtivo" type="checkbox"></label>
     <label>Modo de envio</label><select id="wModo"><option value="webhook">Webhook HTTP</option><option value="evolution">WhatsApp (Evolution API)</option><option value="discord">Discord</option></select>
     <div class="canal-campos" data-wmodo="webhook">
       <div class="campo-largo"><label>URL de destino</label><input id="wUrl" placeholder="https://exemplo.com/webhook"></div>
