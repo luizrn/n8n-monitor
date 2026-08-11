@@ -1,5 +1,7 @@
 # n8n-monitor
 
+> **English version:** [Read the project README in English.](README.en.md)
+
 [![MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Node 20+](https://img.shields.io/badge/node-20%2B-339933.svg)](https://nodejs.org/)
 
