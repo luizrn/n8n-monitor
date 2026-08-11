@@ -33,6 +33,7 @@ Node.js puro, sem dependências npm, framework ou etapa de build.
 | 🌐 | Domínios | Consulta expiração por RDAP e ignora TLDs sem fonte confiável. |
 | 🐳 | Docker | Imagem não-root, health check, volume persistente e Compose preso ao loopback. |
 | 🧪 | Testes automatizados | `node:test`, smoke test do servidor e verificações de sintaxe executadas localmente. |
+| 🌍 | Interface bilíngue | Português (Brasil) e inglês em Monitor, Configurações, Tarefas, Dashboard, Logs, modais e notificações. |
 
 ## Início rápido
 
@@ -65,8 +66,9 @@ Não exponha o painel diretamente à internet: ele é uma ferramenta administrat
 
 ## Configuração
 
-As quatro abas ficam no Monitor:
+As cinco abas ficam no Monitor:
 
+- **Geral:** idioma da interface entre Português (Brasil) e inglês, persistido para todas as telas.
 - **Instâncias n8n:** nome, URL, API key, ativação e teste individual.
 - **Notificações:** duração do toast de 0 a 600 segundos, navegador, som e volume.
 - **Uptime Kuma:** URL, API key, slug público opcional, antecedência e seleção de monitores.

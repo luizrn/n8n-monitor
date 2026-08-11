@@ -35,6 +35,7 @@ window.Toaster = (() => {
   const avisados = new Set(carregarAvisados())
   let ultimoSom = 0
   let audio = null
+  const tr = (s) => window.I18n?.t(s) || s
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
@@ -112,8 +113,8 @@ window.Toaster = (() => {
     // Aba em foco já mostra o toast; duplicar em notificação de sistema é ruído.
     if (document.visibilityState === 'visible') return
     try {
-      const n = new Notification(`${a.nivel === 'ruim' ? '🔴' : '🟡'} ${a.tipo || 'alerta'}`, {
-        body: [a.titulo, magnitude > 1 ? `${magnitude} ocorrências` : null]
+      const n = new Notification(`${a.nivel === 'ruim' ? '🔴' : '🟡'} ${tr(a.tipo || 'alerta')}`, {
+        body: [a.titulo, magnitude > 1 ? `${magnitude} ${tr('ocorrências')}` : null]
           .filter(Boolean).join(' — '),
         // `tag` faz o sistema SUBSTITUIR a notificação anterior do mesmo
         // problema em vez de empilhar uma pilha de avisos idênticos.
@@ -196,11 +197,11 @@ window.Toaster = (() => {
          <span class="tipo">${esc(a.tipo || '')}</span>
          ${a.marca ? `<span class="marca">${esc(a.marca)}</span>` : ''}
          <span class="vezes"${magnitude > 1 ? '' : ' hidden'}>×${magnitude}</span>
-         <button class="x" type="button" aria-label="fechar">×</button>
+         <button class="x" type="button" aria-label="${tr('fechar')}">×</button>
        </div>
        <div class="tit">${esc(a.titulo || '')}</div>
        ${a.det ? `<div class="det">${a.det}</div>` : ''}
-       ${a.link ? `<div class="det"><a href="${esc(a.link)}" target="_blank">abrir no n8n →</a></div>` : ''}`
+       ${a.link ? `<div class="det"><a href="${esc(a.link)}" target="_blank">${tr('abrir no n8n →')}</a></div>` : ''}`
 
     el.querySelector('.x').addEventListener('click', () => fechar(a.chave))
 

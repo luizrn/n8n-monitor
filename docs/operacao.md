@@ -46,6 +46,10 @@ A permissão do navegador é pedida ao ativar a opção. Se ela foi negada perma
 
 Áudio precisa de gesto do usuário; use **Testar** depois de abrir Configurações. O som toca somente para vermelho e respeita cooldown.
 
+## Idioma
+
+Em **Configurações > Geral**, selecione **Português (Brasil)** ou **English**. O valor é persistido em `config.json`, devolvido por `GET /api/config` e aplicado a Monitor, Configurações, Tarefas, Dashboard, Logs, modais, toasts e notificações do sistema. Datas e números usam o locale correspondente. A preferência também é espelhada no `localStorage` para evitar troca visual durante a navegação.
+
 ## Canais externos
 
 Em **Configurações > Webhook**, adicione um ou mais destinos. Cada item possui nome, modo, switch, credenciais, botão de teste e último resultado independentes. Destinos ativos recebem o mesmo ciclo de eventos simultaneamente; um destino desativado deixa de receber sem afetar os demais. Ao reativá-lo, alertas ainda abertos são enviados uma vez.

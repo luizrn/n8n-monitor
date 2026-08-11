@@ -42,12 +42,14 @@ O diretório é `N8N_MONITOR_DATA_DIR`, `%LOCALAPPDATA%\n8n-monitor` ou `$HOME/n
 
 | Arquivo | Conteúdo |
 |---|---|
-| `config.json` | instâncias e credenciais, notificações, Kuma e webhook |
+| `config.json` | idioma, instâncias e credenciais, notificações, Kuma e webhook |
 | `reconhecimentos.json` | magnitude reconhecida por alerta |
 | `tarefas.json` | tarefas e histórico de transições |
 | `webhook-estado.json` | assinaturas entregues e último resultado por destino externo |
 
 Segredos nunca aparecem em `GET /api/config`: são substituídos por marcadores como `temChave`, `temToken`, `temBearer`, `temHeaderValor`, `temEvolutionApiKey` e `temDiscordUrl`.
+
+`public/i18n.js` centraliza o catálogo `pt-BR`/`en`, aplica traduções a conteúdo estático e dinâmico e fornece o locale de datas e números. O servidor valida e persiste apenas esses dois códigos de idioma.
 
 ## Contrato de alerta
 
