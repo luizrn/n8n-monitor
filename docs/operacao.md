@@ -52,7 +52,7 @@ Em **Configurações > Geral**, selecione **Português (Brasil)** ou **English**
 
 ## Canais externos
 
-Em **Configurações > Webhook**, adicione um ou mais destinos. Cada item possui nome, modo, switch, credenciais, botão de teste e último resultado independentes. Destinos ativos recebem o mesmo ciclo de eventos simultaneamente; um destino desativado deixa de receber sem afetar os demais. Ao reativá-lo, alertas ainda abertos são enviados uma vez.
+Em **Configurações > Envio de alertas**, adicione um ou mais destinos. Cada item possui nome, modo, switch, credenciais, botão de teste e último resultado independentes. Destinos ativos recebem o mesmo ciclo de eventos simultaneamente; um destino desativado deixa de receber sem afetar os demais. Ao reativá-lo, alertas ainda abertos são enviados uma vez.
 
 - **Webhook HTTP:** informe URL e método (`POST`, `PUT` ou `PATCH`). Bearer e um par nome/valor de header são opcionais.
 - **WhatsApp (Evolution API):** informe URL base, nome da instância, API key e número com país e DDD. O painel usa o endpoint oficial `/message/sendText/{instanceName}`.

@@ -72,7 +72,7 @@ The Monitor contains five settings tabs:
 - **n8n Instances:** name, URL, API key, activation, and individual connection test.
 - **Notifications:** toast duration from 0 to 600 seconds, browser notifications, sound, and volume.
 - **Uptime Kuma:** URL, API key, optional public-page slug, expiration warning threshold, and monitor selection.
-- **Webhook:** a list of HTTP Webhook, WhatsApp/Evolution API, and Discord destinations, each with its own name, activation switch, credentials, test action, and latest result. Multiple destinations can run simultaneously. HTTP mode supports `POST`, `PUT`, or `PATCH`, Bearer authentication, and one optional custom header.
+- **Alert delivery:** a list of HTTP Webhook, WhatsApp/Evolution API, and Discord destinations, each with its own name, activation switch, credentials, test action, and latest result. Multiple destinations can run simultaneously. HTTP mode supports `POST`, `PUT`, or `PATCH`, Bearer authentication, and one optional custom header.
 
 Secret fields are always returned empty to the browser. Leaving them empty when saving preserves the current value.
 
