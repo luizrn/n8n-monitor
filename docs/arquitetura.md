@@ -1,5 +1,7 @@
 # Arquitetura
 
+> **English version:** [Architecture](architecture.en.md)
+
 ## Visão geral
 
 O projeto é um servidor HTTP em Node.js e quatro páginas HTML sem build. O processo mantém clientes e caches separados por instância n8n, coleta os dados em segundo plano e entrega um estado normalizado às telas.
@@ -50,6 +52,8 @@ O diretório é `N8N_MONITOR_DATA_DIR`, `%LOCALAPPDATA%\n8n-monitor` ou `$HOME/n
 Segredos nunca aparecem em `GET /api/config`: são substituídos por marcadores como `temChave`, `temToken`, `temBearer`, `temHeaderValor`, `temEvolutionApiKey` e `temDiscordUrl`.
 
 `public/i18n.js` centraliza o catálogo `pt-BR`/`en`, aplica traduções a conteúdo estático e dinâmico e fornece o locale de datas e números. O servidor valida e persiste apenas esses dois códigos de idioma.
+
+Quando não há alertas visíveis, o Monitor usa o estado normalizado para exibir quantas instâncias n8n ativas estão alcançáveis e quantos monitores Kuma selecionados estão conectados. O botão **Detalhes** do bloco N8N navega para `/logs`; o botão equivalente do Kuma abre o inventário de serviços no próprio Monitor.
 
 ## Contrato de alerta
 

@@ -1,5 +1,7 @@
 # Contribuindo
 
+> **English version:** [Contributing](CONTRIBUTING.en.md)
+
 Obrigado por ajudar o n8n-monitor.
 
 ## Ambiente local
@@ -24,7 +26,7 @@ Abra `http://127.0.0.1:8787`. Use credenciais de teste e nunca versione `config.
 4. Inclua testes proporcionais ao risco e atualize a documentação pública.
 5. Execute `npm test` e `npm run check` antes do pull request.
 
-Use português claro nas telas e documentação. Código, identificadores e comentários devem seguir o estilo já existente. Não reformate arquivos sem relação com a mudança.
+Mantenha textos de interface e documentação pública em Português (Brasil) e inglês. Código, identificadores e comentários devem seguir o estilo já existente. Não reformate arquivos sem relação com a mudança.
 
 ## Pull requests
 

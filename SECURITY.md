@@ -1,5 +1,7 @@
 # Política de segurança
 
+> **English version:** [Security policy](SECURITY.en.md)
+
 ## Versões suportadas
 
 O projeto ainda não publica releases versionadas. A branch `main` é a única versão suportada até a criação da primeira tag estável.

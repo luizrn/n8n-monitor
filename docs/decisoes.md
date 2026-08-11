@@ -1,5 +1,7 @@
 # Decisões de projeto
 
+> **English version:** [Design decisions](decisions.en.md)
+
 ## Confiabilidade antes de volume
 
 Ausência de execução retida não prova que um agendamento falhou. O comparador só julga o período coberto por dados reais e mostra `sem-dados` quando a retenção não permite conclusão.

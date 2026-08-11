@@ -1,5 +1,7 @@
 # Operação
 
+> **English version:** [Operations](operations.en.md)
+
 ## Inicialização
 
 Direta:
@@ -25,6 +27,8 @@ Crie uma API key em **Settings > n8n API**. Para cada instância, informe nome, 
 Desativar uma instância interrompe a coleta sem apagar sua configuração. Remover a instância mantém tarefas históricas com o nome gravado.
 
 Retenção curta limita Dashboard e auditoria de cron. Ajuste a retenção do n8n conforme o período que deseja observar; o monitor informa a cobertura real.
+
+Sem problemas ativos, o painel mostra a quantidade de instâncias n8n ativas e alcançáveis. Use **Detalhes** no bloco N8N para abrir `/logs` com as execuções coletadas.
 
 ## Uptime Kuma
 
@@ -53,6 +57,8 @@ Em **Configurações > Geral**, selecione **Português (Brasil)** ou **English**
 ## Canais externos
 
 Em **Configurações > Envio de alertas**, adicione um ou mais destinos. Cada item possui nome, modo, switch, credenciais, botão de teste e último resultado independentes. Destinos ativos recebem o mesmo ciclo de eventos simultaneamente; um destino desativado deixa de receber sem afetar os demais. Ao reativá-lo, alertas ainda abertos são enviados uma vez.
+
+Sem destinos salvos, a aba permanece vazia e mostra somente **Adicionar destino**; nenhuma configuração de exemplo é criada automaticamente. O atalho **Documentação** nas Configurações abre a pasta pública `docs/` no GitHub.
 
 - **Webhook HTTP:** informe URL e método (`POST`, `PUT` ou `PATCH`). Bearer e um par nome/valor de header são opcionais.
 - **WhatsApp (Evolution API):** informe URL base, nome da instância, API key e número com país e DDD. O painel usa o endpoint oficial `/message/sendText/{instanceName}`.

@@ -20,11 +20,11 @@ Built with plain Node.js, with no npm dependencies, framework, or build step.
 | 🚨 | Grouped alerts | Groups repeated failures by instance, workflow, and node while preserving magnitude and diagnostics. |
 | ⏱️ | Stuck executions | Live timer and yellow alert after 30 minutes. |
 | 📅 | Schedule auditing | Compares Schedule Trigger, Cron, and Interval definitions with the executions actually retained by n8n. |
-| 🏷️ | Multiple instances | Configuration, cache, links, tags, and filters isolated by n8n instance. |
+| 🏷️ | Multiple instances | Configuration, cache, links, tags, and filters isolated by n8n instance, with a summary of active connections. |
 | ✅ | Automatic resolution | Removes an alert when a later execution confirms recovery. |
 | 📋 | Tasks | Moves alerts to List or Kanban views with six statuses, notes, and history. |
 | 📊 | Dashboard | Volume, failures, error rate, median, and p95 for periods of up to seven days. |
-| 🔎 | Logs | Search and filters by status, mode, period, and instance, with redacted diagnostics. |
+| 🔎 | Logs | Search and filters by status, mode, period, and instance, with redacted diagnostics and access from the n8n Details button. |
 | 🔔 | Browser notifications | Reports yellow and red changes while the Monitor is open in the background. |
 | 🔊 | Sound | Plays only for red alerts, with volume, test control, and an anti-spam cooldown. |
 | 🪝 | External channels | Sends opened, worsened, and resolved events simultaneously to multiple HTTP Webhooks, WhatsApp/Evolution API, and Discord destinations. |
@@ -74,6 +74,8 @@ The Monitor contains five settings tabs:
 - **Uptime Kuma:** URL, API key, optional public-page slug, expiration warning threshold, and monitor selection.
 - **Alert delivery:** a list of HTTP Webhook, WhatsApp/Evolution API, and Discord destinations, each with its own name, activation switch, credentials, test action, and latest result. Multiple destinations can run simultaneously. HTTP mode supports `POST`, `PUT`, or `PATCH`, Bearer authentication, and one optional custom header.
 
+The **Alert delivery** tab starts empty and creates a form only after **Add destination** is selected. The **Documentation** shortcut opens the project's public GitHub guides.
+
 Secret fields are always returned empty to the browser. Leaving them empty when saving preserves the current value.
 
 Available environment variables:
@@ -102,7 +104,7 @@ Data is stored in `%LOCALAPPDATA%\n8n-monitor` on Windows, `$HOME/n8n-monitor` o
 
 Each problem has a stable key. Toasts, browser notifications, and sounds are emitted only once while that key remains active, even if its magnitude increases or the page is reloaded. When the problem disappears, the key is released and a future recurrence may notify again. **Under analysis** moves the item to Tasks and removes it from the Monitor; **Resolved** acknowledges the current magnitude.
 
-Each external destination maintains its own state machine and receives `opened`, `worsened`, and `resolved` events. See [docs/arquitetura.md](docs/arquitetura.md) for the schema.
+Each external destination maintains its own state machine and receives `opened`, `worsened`, and `resolved` events. See [docs/architecture.en.md](docs/architecture.en.md) for the schema.
 
 ## Development
 
@@ -112,13 +114,13 @@ npm run check
 npm start
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md).
+See [CONTRIBUTING.en.md](CONTRIBUTING.en.md), [SECURITY.en.md](SECURITY.en.md), and [CHANGELOG.en.md](CHANGELOG.en.md).
 
 ## Documentation
 
-- [Architecture](docs/arquitetura.md): components, data, APIs, and payloads.
-- [Decisions](docs/decisoes.md): reliability and anti-spam criteria.
-- [Operations](docs/operacao.md): installation, security, and troubleshooting.
+- [Architecture](docs/architecture.en.md): components, data, APIs, and payloads.
+- [Decisions](docs/decisions.en.md): reliability and anti-spam criteria.
+- [Operations](docs/operations.en.md): installation, security, and troubleshooting.
 
 ## License
 
