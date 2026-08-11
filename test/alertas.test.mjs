@@ -24,3 +24,22 @@ test('mapeia severidade equilibrada do Kuma e expiracoes', () => {
   assert.equal(alertas.filter((a) => a.origem === 'tls')[0].nivel, 'atencao')
   assert.ok(!alertas.some((a) => a.titulo === 'Fila'))
 })
+
+test('leva apenas servicos Kuma ativos e offline para o painel de atencao', () => {
+  const alertas = montarAlertas({}, {}, {
+    ok: true,
+    baseUrl: 'https://kuma.example',
+    limiteCertDias: 21,
+    dominios: [],
+    monitores: [
+      { id: 'offline', nome: 'API offline', ativo: true, situacao: 'desligado' },
+      { id: 'online', nome: 'API online', ativo: true, situacao: 'ligado' },
+      { id: 'ignorado', nome: 'API desmarcada', ativo: false, situacao: 'desligado' },
+    ],
+  })
+
+  assert.deepEqual(alertas.map((a) => a.chave), ['kuma:offline'])
+  assert.equal(alertas[0].nivel, 'ruim')
+  assert.equal(alertas[0].tipo, 'serviço offline')
+  assert.equal(alertas[0].instancia, 'Uptime Kuma')
+})

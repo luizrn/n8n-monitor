@@ -74,6 +74,7 @@ export function montarAlertas(estado = {}, cron = {}, uptime = {}) {
           tipo: m.situacao === 'desligado' ? 'serviço offline' : 'status desconhecido',
           titulo: m.nome, resumo: `${m.nome}: ${m.situacao}`,
           detalhe: m.alvo || m.tipo || 'monitor do Uptime Kuma', magnitude: 1,
+          instancia: 'Uptime Kuma',
           link: uptime.baseUrl,
         })
       }
