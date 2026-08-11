@@ -39,6 +39,7 @@
   <div class="topo">
     <nav class="nav">
       <a href="/">Monitor</a>
+      <a href="/tarefas">Tarefas</a>
       <a href="/dashboard">Dashboard</a>
       <a href="/logs" class="atual">Logs</a>
     </nav>
@@ -57,6 +58,7 @@
     </label>
     <div class="grupo" id="fStatus"><span class="rot">status</span></div>
     <div class="grupo" id="fModo"><span class="rot">modo</span></div>
+    <div class="grupo" id="fInst"><span class="rot">instância</span></div>
     <div class="grupo"><span class="rot">período</span>
       <select id="fHoras">
         <option value="1">1h</option>
@@ -106,7 +108,7 @@ const dms = ms => {
 const COR = {success:'var(--pontoBom)', error:'var(--pontoRuim)', crashed:'var(--pontoRuim)',
   running:'var(--calmo)', waiting:'var(--pontoAtencao)', new:'var(--ink3)', canceled:'var(--ink3)', unknown:'var(--ink3)'}
 
-const estado = { q:'', status:new Set(), modo:new Set(), horas:24, pagina:0, itens:[], base:'' }
+const estado = { q:'', status:new Set(), modo:new Set(), instancias:new Set(), horas:24, pagina:0, itens:[], bases:{} }
 let ultimoDiag = ''
 
 function pintarStatus(n, r){ $('#status').className = n; $('#statusNome').textContent = r }
@@ -125,11 +127,17 @@ function chips(alvo, contas, sel, aoClicar, classe){
   }
 }
 
+function chipsInst(d){
+  const el=$('#fInst');el.querySelectorAll('.chip').forEach(c=>c.remove())
+  for(const i of d.instancias){const b=document.createElement('button');b.className='chip'+(estado.instancias.has(i.id)?' on':'');b.innerHTML=`${esc(i.nome)}<span class="c">${nf(d.porInstancia[i.id]||0)}</span>`;b.onclick=()=>{estado.instancias.has(i.id)?estado.instancias.delete(i.id):estado.instancias.add(i.id);aplicar()};el.appendChild(b)}
+}
+
 function linha(e){
-  return `<tr class="clic" data-id="${esc(e.id)}" data-wf="${esc(e.workflowId)}" data-fluxo="${esc(e.fluxo)}">
-    <td class="n"><a href="${esc(estado.base)}/workflow/${esc(e.workflowId)}/executions/${esc(e.id)}"
+  return `<tr class="clic" data-id="${esc(e.id)}" data-wf="${esc(e.workflowId)}" data-fluxo="${esc(e.fluxo)}" data-inst="${esc(e.instanciaId)}">
+    <td class="n"><a href="${esc(estado.bases[e.instanciaId]||'')}/workflow/${esc(e.workflowId)}/executions/${esc(e.id)}"
        target="_blank" onclick="event.stopPropagation()">#${esc(e.id)}</a></td>
     <td>${esc(e.fluxo)}</td>
+    <td><span class="tag">${esc(e.instancia)}</span></td>
     <td><span class="st"><span class="pt" style="background:${COR[e.status]||'var(--ink3)'}"></span>${esc(e.status)}</span></td>
     <td>${esc(e.modo||'')}</td>
     <td class="n">${dh(e.inicio)}</td>
@@ -143,6 +151,7 @@ async function buscar(acumular){
   })
   if (estado.status.size) p.set('status', [...estado.status].join(','))
   if (estado.modo.size) p.set('modo', [...estado.modo].join(','))
+  if (estado.instancias.size) p.set('instancias', [...estado.instancias].join(','))
   try{
     const d = await (await fetch('/api/logs?'+p, {cache:'no-store'})).json()
     if (!d.ok){
@@ -151,13 +160,14 @@ async function buscar(acumular){
       return
     }
     pintarStatus('ok','conectado')
-    estado.base = d.baseUrl
+    estado.bases = Object.fromEntries(d.instancias.map(i=>[i.id,i.baseUrl]))
     estado.itens = acumular ? estado.itens.concat(d.itens) : d.itens
     chips('#fStatus', d.porStatus, estado.status, aplicar, true)
     chips('#fModo', d.porModo, estado.modo, aplicar, false)
+    chipsInst(d)
 
     $('#tb').innerHTML = estado.itens.length
-      ? '<thead><tr><th>Execução</th><th>Fluxo</th><th>Status</th><th>Modo</th><th>Início</th><th>Duração</th></tr></thead><tbody>'
+      ? '<thead><tr><th>Execução</th><th>Fluxo</th><th>Instância</th><th>Status</th><th>Modo</th><th>Início</th><th>Duração</th></tr></thead><tbody>'
         + estado.itens.map(linha).join('') + '</tbody>'
       : `<tbody><tr><td class="vazio">Nada encontrado com esses filtros.</td></tr></tbody>`
 
@@ -182,9 +192,9 @@ $('#btAtualizar').onclick = () => aplicar()
 
 $('#btCopiar').onclick = async ev => {
   const L = ['# Execuções n8n', '',
-    `filtro: ${estado.q||'(sem busca)'} · status: ${[...estado.status].join(',')||'todos'} · modo: ${[...estado.modo].join(',')||'todos'} · período: ${estado.horas?estado.horas+'h':'tudo'}`,
-    '', '| execução | fluxo | status | modo | início | duração |', '|---|---|---|---|---|---|']
-  for (const e of estado.itens) L.push(`| #${e.id} | ${e.fluxo} | ${e.status} | ${e.modo} | ${dh(e.inicio)} | ${dms(e.duracaoMs)} |`)
+    `filtro: ${estado.q||'(sem busca)'} · status: ${[...estado.status].join(',')||'todos'} · modo: ${[...estado.modo].join(',')||'todos'} · instâncias: ${[...estado.instancias].join(',')||'todas'} · período: ${estado.horas?estado.horas+'h':'tudo'}`,
+    '', '| execução | fluxo | instância | status | modo | início | duração |', '|---|---|---|---|---|---|---|']
+  for (const e of estado.itens) L.push(`| #${e.id} | ${e.fluxo} | ${e.instancia} | ${e.status} | ${e.modo} | ${dh(e.inicio)} | ${dms(e.duracaoMs)} |`)
   await copiar(L.join('\n'), ev.target)
 }
 
@@ -200,11 +210,11 @@ $('#tb').addEventListener('click', async ev => {
   const id = tr.dataset.id
   $('#dlgTitulo').textContent = `Execução #${id}`
   $('#dlgSub').textContent = tr.dataset.fluxo
-  $('#dlgLink').href = `${estado.base}/workflow/${tr.dataset.wf}/executions/${id}`
+  $('#dlgLink').href = `${estado.bases[tr.dataset.inst]||''}/workflow/${tr.dataset.wf}/executions/${id}`
   $('#dlgCorpo').textContent = 'carregando…'
   ultimoDiag = ''
   $('#dlg').showModal()
-  const d = await (await fetch('/api/execucao?id='+encodeURIComponent(id))).json()
+  const d = await (await fetch('/api/execucao?id='+encodeURIComponent(id)+'&instancia='+encodeURIComponent(tr.dataset.inst))).json()
   ultimoDiag = d.ok ? d.diagnostico : ('não foi possível montar o diagnóstico: ' + (d.erro||''))
   $('#dlgCorpo').textContent = ultimoDiag
 })

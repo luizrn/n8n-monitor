@@ -1,21 +1,22 @@
-# Security Policy
+# Política de segurança
 
-## Supported Versions
+## Versões suportadas
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+O projeto ainda não publica releases versionadas. A branch `main` é a única versão suportada até a criação da primeira tag estável.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+## Relatando uma vulnerabilidade
 
-## Reporting a Vulnerability
+Não abra uma issue pública com detalhes de uma vulnerabilidade. Use **Security > Report a vulnerability** no GitHub para criar um relato privado.
 
-Use this section to tell people how to report a vulnerability.
+Inclua, quando possível:
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+- versão, commit e ambiente afetados;
+- passos mínimos para reprodução;
+- impacto observado ou potencial;
+- sugestão de correção, se houver.
+
+O mantenedor confirmará o recebimento em até sete dias. Correções aceitas serão preparadas de forma privada e divulgadas depois que uma versão corrigida estiver disponível.
+
+## Dados sensíveis
+
+O monitor acessa chaves do n8n, Uptime Kuma e webhooks. Nunca inclua esses valores, arquivos de configuração reais ou diagnósticos sem revisar em um relato público.

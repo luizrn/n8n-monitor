@@ -1,9 +1,9 @@
 // Painel de monitoramento do n8n.
 //
-// A chave da API fica SEMPRE do lado do servidor: e lida de um arquivo de config
-// em %LOCALAPPDATA% (fora do repositorio, para nao ser commitada por acidente) e
-// nunca e enviada ao navegador. O endpoint /api/config responde apenas se existe
-// chave configurada, jamais o valor.
+// As chaves de API ficam SEMPRE do lado do servidor: sao lidas de um arquivo de
+// config em %LOCALAPPDATA% (fora do repositorio, para nao ser commitado por
+// acidente) e nunca sao enviadas ao navegador. O endpoint /api/config responde
+// apenas SE existe chave configurada, jamais o valor.
 //
 // Escuta so em 127.0.0.1.
 
@@ -13,52 +13,142 @@ import { execFile } from 'node:child_process'
 import { join, dirname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gatilhosDe, regraParaCron, descreverRegra, esperadas, comparar } from './cron.mjs'
+import { clienteDe, criarCliente, descartarClientes, idDeInstancia } from './instancias.mjs'
+import { coletarUptime } from './uptime.mjs'
+import { criarRepo, ESTADOS as ESTADOS_TAREFA, normalizarEstado } from './tarefas.mjs'
+import { montarAlertas } from './alertas.mjs'
+import { criarResolvedorRdap } from './rdap.mjs'
+import { criarDispatcherWebhook, payloadDe } from './webhook.mjs'
 
 const AQUI = dirname(fileURLToPath(import.meta.url))
 const PORTA = Number(process.env.PORT || 8787)
+const HOST = process.env.HOST || '127.0.0.1'
 
-const DIR_CONFIG = join(
-  process.env.LOCALAPPDATA || process.env.HOME || AQUI,
-  'n8n-monitor'
-)
+const DIR_CONFIG = process.env.N8N_MONITOR_DATA_DIR
+  ? resolve(process.env.N8N_MONITOR_DATA_DIR)
+  : join(process.env.LOCALAPPDATA || process.env.HOME || AQUI, 'n8n-monitor')
 const ARQ_CONFIG = join(DIR_CONFIG, 'config.json')
 const ARQ_RECON = join(DIR_CONFIG, 'reconhecimentos.json')
+const ARQ_TAREFAS = join(DIR_CONFIG, 'tarefas.json')
+const ARQ_WEBHOOK = join(DIR_CONFIG, 'webhook-estado.json')
+
+const NOTIF_PADRAO = {
+  // 0 = o toast nao fecha sozinho. O maximo de 600s vem do pedido de "ate 10min".
+  toastSeg: 60,
+  navegador: false,
+  som: false,
+  volume: 0.5,
+}
+
+const UPTIME_PADRAO = {
+  ativo: false,
+  baseUrl: '',
+  token: '',
+  slug: '',
+  monitores: {},      // nome -> boolean; ausente = ativo
+  avisarCertDias: 21,
+}
+
+const WEBHOOK_PADRAO = {
+  ativo: false,
+  url: '',
+  bearer: '',
+}
 
 const PADRAO = {
-  baseUrl: process.env.N8N_BASE_URL || 'http://localhost:5678',
-  apiKey: '',
+  instancias: [],
   ativo: true,
   fuso: 'America/Cuiaba',   // usado quando o workflow nao define timezone proprio
   horasCron: 24,            // janela da conferencia configurado-vs-executou
   toleranciaMin: 5,         // atraso aceito antes de considerar ocorrencia perdida
+  notificacoes: { ...NOTIF_PADRAO },
+  uptimeKuma: { ...UPTIME_PADRAO },
+  webhook: { ...WEBHOOK_PADRAO },
 }
 
 let config = { ...PADRAO }
+
+const LIMITE_TRAVADA_MIN = 30
+const JANELA_MS = 3600000
+const ehErro = (s) => s === 'error' || s === 'crashed'
 
 // ---------------------------------------------------------------- config
 
 async function lerRegistroWindows() {
   if (process.platform !== 'win32') return ''
-  return new Promise((resolve) => {
+  return new Promise((ok) => {
     execFile(
       'powershell.exe',
       ['-NoProfile', '-Command', "[Environment]::GetEnvironmentVariable('N8N_API_KEY','User')"],
       { timeout: 10000 },
-      (erro, saida) => resolve(erro ? '' : String(saida).trim())
+      (erro, saida) => ok(erro ? '' : String(saida).trim())
     )
   })
 }
 
-async function carregarConfig() {
-  try {
-    config = { ...PADRAO, ...JSON.parse(await readFile(ARQ_CONFIG, 'utf8')) }
-  } catch {
-    config = { ...PADRAO }
+function saneaInstancia(cru, i) {
+  const nome = String(cru?.nome || '').trim() || `n8n ${i + 1}`
+  return {
+    id: String(cru?.id || '').trim() || idDeInstancia(nome),
+    nome,
+    baseUrl: String(cru?.baseUrl || '').trim().replace(/\/+$/, ''),
+    apiKey: String(cru?.apiKey || ''),
+    ativo: cru?.ativo !== false,
   }
-  // Semeia a chave do ambiente na primeira execucao, para funcionar de imediato.
-  if (!config.apiKey) {
-    config.apiKey = process.env.N8N_API_KEY || (await lerRegistroWindows()) || ''
-    if (config.apiKey) await salvarConfig()
+}
+
+// MIGRACAO. A primeira versao guardava uma instancia unica em `baseUrl`/`apiKey`
+// na raiz da config. Ler isso e converter em lista e o que evita que quem ja
+// usava o painel perca a configuracao ao atualizar.
+function migrar(cru) {
+  const c = { ...PADRAO, ...cru }
+  c.notificacoes = { ...NOTIF_PADRAO, ...(cru?.notificacoes || {}) }
+  c.uptimeKuma = { ...UPTIME_PADRAO, ...(cru?.uptimeKuma || {}) }
+  c.webhook = { ...WEBHOOK_PADRAO, ...(cru?.webhook || {}) }
+
+  if (!Array.isArray(c.instancias) || !c.instancias.length) {
+    const url = String(cru?.baseUrl || process.env.N8N_BASE_URL || '').trim()
+    const chave = String(cru?.apiKey || '').trim()
+    c.instancias = (url || chave)
+      ? [{ id: 'principal', nome: 'Principal', baseUrl: url || 'http://localhost:5678', apiKey: chave, ativo: true }]
+      : []
+  }
+  c.instancias = c.instancias.map(saneaInstancia)
+
+  // ids duplicados quebram o cache por instancia e o roteamento de /api/execucao
+  const vistos = new Set()
+  for (const inst of c.instancias) {
+    let id = inst.id, n = 2
+    while (vistos.has(id)) id = `${inst.id}-${n++}`
+    inst.id = id
+    vistos.add(id)
+  }
+
+  delete c.baseUrl
+  delete c.apiKey
+  return c
+}
+
+async function carregarConfig() {
+  let cru = {}
+  try { cru = JSON.parse(await readFile(ARQ_CONFIG, 'utf8')) } catch { cru = {} }
+  config = migrar(cru)
+
+  // Semeia a primeira instancia a partir do ambiente, para o painel funcionar de
+  // imediato numa maquina recem-configurada.
+  if (!config.instancias.length) {
+    const chave = process.env.N8N_API_KEY || (await lerRegistroWindows()) || ''
+    if (chave) {
+      config.instancias = [{
+        id: 'principal', nome: 'Principal',
+        baseUrl: (process.env.N8N_BASE_URL || 'http://localhost:5678').replace(/\/+$/, ''),
+        apiKey: chave, ativo: true,
+      }]
+      await salvarConfig()
+    }
+  } else if (config.instancias.length === 1 && !config.instancias[0].apiKey) {
+    const chave = process.env.N8N_API_KEY || (await lerRegistroWindows()) || ''
+    if (chave) { config.instancias[0].apiKey = chave; await salvarConfig() }
   }
 }
 
@@ -67,94 +157,22 @@ async function salvarConfig() {
   await writeFile(ARQ_CONFIG, JSON.stringify(config, null, 2), { mode: 0o600 })
 }
 
-// ---------------------------------------------------------------- n8n
+const instanciasAtivas = () => config.instancias.filter((i) => i.ativo && i.apiKey && i.baseUrl)
+const instanciaPorId = (id) => config.instancias.find((i) => i.id === id) || null
 
-const cacheNomes = new Map()
-let nomesEm = 0
+// Instancia publicavel: tudo menos o segredo.
+const publica = (i) => ({
+  id: i.id, nome: i.nome, baseUrl: i.baseUrl, ativo: i.ativo, temChave: Boolean(i.apiKey),
+})
 
-async function chamarN8n(caminho) {
-  if (!config.apiKey || !config.baseUrl) throw new Error('nao configurado')
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 25000)
-  try {
-    const r = await fetch(config.baseUrl.replace(/\/+$/, '') + caminho, {
-      headers: { 'X-N8N-API-KEY': config.apiKey, accept: 'application/json' },
-      signal: ctrl.signal,
-    })
-    if (!r.ok) throw new Error(`HTTP ${r.status}`)
-    return await r.json()
-  } finally {
-    clearTimeout(t)
-  }
-}
-
-async function nomesDeFluxos() {
-  if (Date.now() - nomesEm < 300000 && cacheNomes.size) return cacheNomes
-  try {
-    const r = await chamarN8n('/api/v1/workflows?limit=250')
-    for (const w of r.data || []) cacheNomes.set(w.id, w.name)
-    nomesEm = Date.now()
-  } catch {
-    /* mantem o cache anterior */
-  }
-  return cacheNomes
-}
-
-async function nomeDeFluxo(id) {
-  const m = await nomesDeFluxos()
-  if (m.has(id)) return m.get(id)
-  try {
-    const w = await chamarN8n(`/api/v1/workflows/${id}`)
-    if (w?.name) { cacheNomes.set(id, w.name); return w.name }
-  } catch { /* ignora */ }
-  return id
-}
-
-const LIMITE_TRAVADA_MIN = 30
-const JANELA_MS = 3600000
-
-// ------------------------------------------------- lista recente em cache
+// ------------------------------------------- reconhecimento de alertas
 //
-// Busca e agregacao rodam sobre esta lista, nao sobre a API. Sem isso, cada
-// tecla digitada na busca dispararia paginacao remota. O cache e curto de
-// proposito: 30s deixa a tela viva sem transformar o painel em carga.
-let cacheLista = { em: 0, itens: [], truncado: false, paginas: 0 }
-
-// `paginas` cresce conforme a janela pedida: 10 paginas cobrem menos de 2 horas
-// numa instancia com ~1.400 execucoes/hora, entao um pedido de 24h precisa ler
-// muito mais. O cache guarda com quantas paginas foi montado e refaz a leitura
-// quando alguem pede mais fundo do que ele tem.
-async function listarRecentes(paginas = 10) {
-  const valido = Date.now() - cacheLista.em < 30000 && cacheLista.itens.length
-  if (valido && cacheLista.paginas >= paginas) return cacheLista
-  const { itens, truncado } = await paginarExecucoes('', { paginas })
-  await nomesDeFluxos()
-  const enriquecidos = itens.map((e) => ({
-    id: e.id,
-    workflowId: e.workflowId,
-    fluxo: cacheNomes.get(e.workflowId) || e.workflowId,
-    status: e.status,
-    modo: e.mode,
-    inicio: e.startedAt,
-    fim: e.stoppedAt,
-    duracaoMs: e.startedAt && e.stoppedAt
-      ? new Date(e.stoppedAt).getTime() - new Date(e.startedAt).getTime()
-      : null,
-  }))
-  cacheLista = { em: Date.now(), itens: enriquecidos, truncado, paginas }
-  return cacheLista
-}
-
-const ehErro = (s) => s === 'error' || s === 'crashed'
-
-// ------------------------------------------------- reconhecimento de alertas
+// Guardado em disco, nao no navegador: marcar algo como tratado e informacao de
+// equipe, e some se ficar preso a um localStorage.
 //
-// Guardado em disco, não no navegador: marcar algo como "em análise" é
-// informação de equipe, e some se ficar preso a um localStorage.
-//
-// A magnitude no momento do reconhecimento é parte do registro. Assim, se o
-// erro voltar a acontecer, ele reaparece sozinho — reconhecer silencia o que
-// já se viu, não o que ainda vai acontecer.
+// A magnitude no momento do reconhecimento e parte do registro. Assim, se o erro
+// voltar a crescer, ele reaparece sozinho — reconhecer silencia o que ja se viu,
+// nao o que ainda vai acontecer.
 let reconhecimentos = {}
 
 async function carregarReconhecimentos() {
@@ -173,38 +191,47 @@ function limparReconhecimentosVelhos() {
   if (mudou) salvarReconhecimentos().catch(() => {})
 }
 
+const repoTarefas = criarRepo({
+  ler: () => readFile(ARQ_TAREFAS, 'utf8'),
+  gravar: async (t) => {
+    await mkdir(DIR_CONFIG, { recursive: true })
+    await writeFile(ARQ_TAREFAS, t, { mode: 0o600 })
+  },
+})
+
+const rdap = criarResolvedorRdap()
+const webhook = criarDispatcherWebhook({
+  ler: () => readFile(ARQ_WEBHOOK, 'utf8'),
+  gravar: async (texto) => {
+    await mkdir(DIR_CONFIG, { recursive: true })
+    await writeFile(ARQ_WEBHOOK, texto, { mode: 0o600 })
+  },
+  obterConfig: () => config.webhook,
+})
+
 function percentil(valores, p) {
   if (!valores.length) return null
   const v = valores.slice().sort((a, b) => a - b)
   return v[Math.min(v.length - 1, Math.floor((p / 100) * v.length))]
 }
 
-// A API limita a 250 por pagina. Sem paginar, o painel reporta 250 como se fosse
-// o total da hora - mentindo para baixo justamente quando o volume explode, que e
-// quando o numero importa. Segue pelo nextCursor ate cobrir a janela.
-async function paginarExecucoes(query, { paginas = 6, ate = null } = {}) {
-  const itens = []
-  let cursor = null
-  for (let p = 0; p < paginas; p++) {
-    const q = `/api/v1/executions?limit=250&${query}` + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '')
-    const r = await chamarN8n(q)
-    const lote = r.data || []
-    itens.push(...lote)
-    cursor = r.nextCursor
-    if (!cursor || !lote.length) break
-    if (ate) {
-      const maisVelho = lote[lote.length - 1]?.startedAt
-      if (maisVelho && new Date(maisVelho).getTime() < ate) break
+// ------------------------------------------------------------- estado
+
+function acharFalha(runData) {
+  for (const [no, execs] of Object.entries(runData || {})) {
+    for (const ex of execs || []) {
+      if (ex?.error) return { no, erro: ex.error, tempo: ex.executionTime }
     }
   }
-  return { itens, truncado: Boolean(cursor) }
+  return null
 }
 
 // Agrupa erros repetidos: um fluxo que falha 200 vezes pelo mesmo motivo deve
 // virar UMA linha com contador, nao 200 linhas. O detalhe (no que falhou e
 // mensagem) e buscado so para o mais recente de cada grupo, para nao fazer uma
 // chamada por execucao.
-async function agruparErros(lista, todasRecentes = []) {
+async function agruparErros(cli, lista, todasRecentes = []) {
+  const inst = cli.inst
   const porFluxo = new Map()
   for (const e of lista) {
     const g = porFluxo.get(e.workflowId) || { workflowId: e.workflowId, execs: [] }
@@ -223,33 +250,35 @@ async function agruparErros(lista, todasRecentes = []) {
     let no = null, mensagem = null
     if (i < MAX_DETALHE) {
       try {
-        const ex = await chamarN8n(`/api/v1/executions/${novo.id}?includeData=true`)
+        const ex = await cli.chamar(`/api/v1/executions/${novo.id}?includeData=true`)
         const rd = ex?.data?.resultData
         const f = acharFalha(rd?.runData) || (rd?.error ? { no: rd.lastNodeExecuted, erro: rd.error } : null)
         no = f?.no ?? rd?.lastNodeExecuted ?? null
         mensagem = f?.erro?.message ?? null
       } catch { /* segue sem detalhe */ }
     }
-    // RESOLUÇÃO AUTOMÁTICA: se o mesmo fluxo voltou a rodar DEPOIS deste erro e
-    // deu certo, o problema passou. Alerta que exige alguém lembrar de fechar
+    // RESOLUCAO AUTOMATICA: se o mesmo fluxo voltou a rodar DEPOIS deste erro e
+    // deu certo, o problema passou. Alerta que exige alguem lembrar de fechar
     // vira lixo acumulado na tela; este some sozinho, com a prova do que o
     // resolveu.
     const instanteErro = new Date(novo.startedAt).getTime()
     const sucessoDepois = todasRecentes.find(
-      (e) => e.workflowId === g.workflowId
-        && e.status === 'success'
-        && e.startedAt
-        && new Date(e.startedAt).getTime() > instanteErro
+      (e) => e.workflowId === g.workflowId && e.status === 'success'
+        && e.startedAt && new Date(e.startedAt).getTime() > instanteErro
     )
 
     saida.push({
+      instanciaId: inst.id,
+      instancia: inst.nome,
+      // A chave inclui a instancia porque os ids de workflow do n8n sao locais:
+      // o mesmo id pode existir em duas instancias apontando para fluxos
+      // diferentes, e sem o prefixo um reconhecimento silenciaria o alerta errado.
+      chave: `erro:${inst.id}:${g.workflowId}:${no || ''}`,
       workflowId: g.workflowId,
-      fluxo: await nomeDeFluxo(g.workflowId),
+      fluxo: await cli.nomeDeFluxo(g.workflowId),
       no,
       mensagem,
-      resolvidoPor: sucessoDepois
-        ? { id: sucessoDepois.id, quando: sucessoDepois.startedAt }
-        : null,
+      resolvidoPor: sucessoDepois ? { id: sucessoDepois.id, quando: sucessoDepois.startedAt } : null,
       total: g.execs.length,
       ids: g.execs.slice(0, 50).map((x) => x.id),
       idExemplo: novo.id,
@@ -262,25 +291,23 @@ async function agruparErros(lista, todasRecentes = []) {
   return saida
 }
 
-async function montarEstado() {
-  const agora = Date.now()
+async function estadoDaInstancia(inst, agora) {
+  const cli = clienteDe(inst)
   const desde = agora - JANELA_MS
 
   const [pgRecentes, pgErros, pgRodando] = await Promise.all([
-    paginarExecucoes('', { paginas: 6, ate: desde }),
-    paginarExecucoes('status=error', { paginas: 3, ate: desde }),
-    paginarExecucoes('status=running', { paginas: 1 }),
+    cli.paginarExecucoes('', { paginas: 6, ate: desde }),
+    cli.paginarExecucoes('status=error', { paginas: 3, ate: desde }),
+    cli.paginarExecucoes('status=running', { paginas: 1 }),
   ])
 
-  const recentes = { data: pgRecentes.itens }
-  const erros = { data: pgErros.itens }
-  const rodando = { data: pgRodando.itens }
-
-  await nomesDeFluxos()
+  await cli.nomesDeFluxos()
 
   const comNome = async (e) => ({
     id: e.id,
-    fluxo: await nomeDeFluxo(e.workflowId),
+    instanciaId: inst.id,
+    instancia: inst.nome,
+    fluxo: await cli.nomeDeFluxo(e.workflowId),
     workflowId: e.workflowId,
     status: e.status,
     modo: e.mode,
@@ -289,87 +316,134 @@ async function montarEstado() {
     minutos: e.startedAt ? (agora - new Date(e.startedAt).getTime()) / 60000 : null,
   })
 
-  const errosJanela = (erros.data || []).filter(
+  const errosJanela = pgErros.itens.filter(
     (e) => e.startedAt && agora - new Date(e.startedAt).getTime() <= JANELA_MS
   )
   const todosGrupos = await agruparErros(
-    errosJanela.length ? errosJanela : (erros.data || []).slice(0, 60),
-    recentes.data || []
+    cli,
+    errosJanela.length ? errosJanela : pgErros.itens.slice(0, 60),
+    pgRecentes.itens
   )
+  const listaRodando = await Promise.all(pgRodando.itens.slice(0, 30).map(comNome))
+
+  const umaHora = pgRecentes.itens.filter(
+    (e) => e.startedAt && agora - new Date(e.startedAt).getTime() <= 3600000
+  )
+
+  const porFluxo = new Map()
+  for (const e of umaHora) {
+    const k = e.workflowId
+    const v = porFluxo.get(k) || {
+      workflowId: k, instanciaId: inst.id, instancia: inst.nome,
+      fluxo: cli.nomes.get(k) || k, total: 0, erros: 0,
+    }
+    v.total++
+    if (ehErro(e.status)) v.erros++
+    porFluxo.set(k, v)
+  }
+
+  return {
+    inst,
+    recentes: pgRecentes.itens,
+    // `truncado` na tela significa "o numero pode ser maior do que este", o que
+    // so e verdade se a leitura NAO alcancou o inicio da janela.
+    truncado: !pgRecentes.cobriu,
+    grupos: todosGrupos,
+    rodando: listaRodando,
+    umaHora,
+    porFluxo: [...porFluxo.values()],
+  }
+}
+
+async function montarEstado() {
+  const agora = Date.now()
+  const ativas = instanciasAtivas()
+
+  // Uma instancia inalcancavel NAO pode derrubar o painel das outras: cada uma e
+  // resolvida em separado e reporta o proprio motivo de falha.
+  const resultados = await Promise.all(ativas.map(async (inst) => {
+    try {
+      return { ok: true, dados: await estadoDaInstancia(inst, agora) }
+    } catch (e) {
+      return { ok: false, inst, motivo: String(e.message || e) }
+    }
+  }))
+
+  const vivos = resultados.filter((r) => r.ok).map((r) => r.dados)
+  const caidas = resultados.filter((r) => !r.ok)
+
+  const todosGrupos = vivos.flatMap((v) => v.grupos)
   const gruposErro = todosGrupos.filter((g) => !g.resolvidoPor)
   const gruposResolvidos = todosGrupos.filter((g) => g.resolvidoPor)
-  const listaRodando = await Promise.all((rodando.data || []).slice(0, 30).map(comNome))
 
-  // Execucoes por minuto nos ultimos 60 min, separadas por desfecho.
-  // Um pico aqui e a assinatura de um loop de auto-disparo.
+  const rodando = vivos.flatMap((v) => v.rodando).sort((a, b) => (b.minutos ?? 0) - (a.minutos ?? 0))
+  const umaHora = vivos.flatMap((v) => v.umaHora)
+  const recentes = vivos.flatMap((v) => v.recentes)
+
+  // Execucoes por minuto nos ultimos 60 min, somando as instancias. Um pico aqui
+  // e a assinatura de um loop de auto-disparo.
   const baldes = new Map()
   for (let i = 59; i >= 0; i--) {
     const t = new Date(agora - i * 60000)
     t.setSeconds(0, 0)
     baldes.set(t.toISOString(), { minuto: t.toISOString(), ok: 0, erro: 0 })
   }
-  for (const e of recentes.data || []) {
+  for (const e of recentes) {
     if (!e.startedAt) continue
     const t = new Date(e.startedAt)
     t.setSeconds(0, 0)
     const b = baldes.get(t.toISOString())
     if (!b) continue
-    if (e.status === 'error' || e.status === 'crashed') b.erro++
-    else b.ok++
+    b[ehErro(e.status) ? 'erro' : 'ok']++
   }
-
-  const porFluxo = new Map()
-  for (const e of recentes.data || []) {
-    if (!e.startedAt || agora - new Date(e.startedAt).getTime() > 3600000) continue
-    const k = e.workflowId
-    const v = porFluxo.get(k) || { workflowId: k, fluxo: cacheNomes.get(k) || k, total: 0, erros: 0 }
-    v.total++
-    if (e.status === 'error' || e.status === 'crashed') v.erros++
-    porFluxo.set(k, v)
-  }
-
-  const umaHora = (recentes.data || []).filter(
-    (e) => e.startedAt && agora - new Date(e.startedAt).getTime() <= 3600000
-  )
 
   return {
     ok: true,
     momento: new Date(agora).toISOString(),
-    baseUrl: config.baseUrl,
+    instancias: [
+      ...vivos.map((v) => ({ ...publica(v.inst), alcancavel: true })),
+      ...caidas.map((c) => ({ ...publica(c.inst), alcancavel: false, motivo: c.motivo })),
+    ],
+    // Instancia que nao responde e problema de nivel vermelho, e o painel precisa
+    // dizer QUAL: com varias instancias, "n8n offline" sem nome nao ajuda ninguem.
+    inalcancaveis: caidas.map((c) => ({ id: c.inst.id, nome: c.inst.nome, motivo: c.motivo })),
     tiles: {
-      errosHora: umaHora.filter((e) => e.status === 'error' || e.status === 'crashed').length,
+      errosHora: umaHora.filter((e) => ehErro(e.status)).length,
       execucoesHora: umaHora.length,
-      rodando: listaRodando.length,
-      travadas: listaRodando.filter((e) => (e.minutos ?? 0) >= LIMITE_TRAVADA_MIN).length,
+      rodando: rodando.length,
+      travadas: rodando.filter((e) => (e.minutos ?? 0) >= LIMITE_TRAVADA_MIN).length,
       porMinuto: umaHora.length / 60,
-      truncado: pgRecentes.truncado,
+      truncado: vivos.some((v) => v.truncado),
     },
     serie: [...baldes.values()],
     erros: gruposErro,
     resolvidos: gruposResolvidos,
     reconhecimentos,
-    rodando: listaRodando,
-    porFluxo: [...porFluxo.values()].sort((a, b) => b.total - a.total).slice(0, 12),
+    tarefasAtivas: repoTarefas.chavesAtivas(),
+    tarefasContagem: repoTarefas.contagem(),
+    rodando,
+    porFluxo: vivos.flatMap((v) => v.porFluxo).sort((a, b) => b.total - a.total).slice(0, 12),
     limiteTravadaMin: LIMITE_TRAVADA_MIN,
   }
 }
 
 // ------------------------------------------- configurado vs executou (cron)
 
-let cacheCron = { em: 0, dados: null }
+const cacheCron = new Map()   // instanciaId -> { em, linhas }
 
-async function conferirAgendamentos() {
-  if (Date.now() - cacheCron.em < 120000 && cacheCron.dados) return cacheCron.dados
+async function cronDaInstancia(inst) {
+  const guardado = cacheCron.get(inst.id)
+  if (guardado && Date.now() - guardado.em < 300000) return guardado.linhas
 
-  const wfs = await chamarN8n('/api/v1/workflows?limit=250')
+  const cli = clienteDe(inst)
+  const wfs = await cli.chamar('/api/v1/workflows?limit=250')
   const fim = Date.now()
   const inicio = fim - config.horasCron * 3600000
 
   const alvos = []
   for (const wf of wfs.data || []) {
     const gats = gatilhosDe(wf)
-    if (!gats.length) continue
-    alvos.push({ wf, gats })
+    if (gats.length) alvos.push({ wf, gats })
   }
 
   const linhas = []
@@ -379,26 +453,33 @@ async function conferirAgendamentos() {
 
     let execs = []
     try {
-      const pg = await paginarExecucoes(`workflowId=${encodeURIComponent(wf.id)}`, { paginas: 3, ate: inicio })
+      const pg = await cli.paginarExecucoes(`workflowId=${encodeURIComponent(wf.id)}`, { paginas: 3, ate: inicio })
       execs = pg.itens
         .filter((e) => e.startedAt && new Date(e.startedAt).getTime() >= inicio)
         .filter((e) => e.mode === 'trigger' || e.mode === 'scheduled')
         .sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt))
     } catch { /* segue sem execucoes */ }
 
+    const base = {
+      instanciaId: inst.id, instancia: inst.nome,
+      fluxo: wf.name, workflowId: wf.id,
+      ativo: Boolean(wf.active), fuso: tz,
+    }
+
     for (const g of gats) {
       const campos = regraParaCron(g.item)
       const desc = descreverRegra(g.item)
+      const comum = { ...base, no: g.no, regra: desc, desativado: g.desativado }
 
       if (!campos) {
         linhas.push({
-          fluxo: wf.name, workflowId: wf.id, no: g.no, regra: desc, fuso: tz,
-          ativo: Boolean(wf.active), desativado: g.desativado,
+          ...comum,
           veredito: 'nao-comparavel',
           detalhe: g.item?.field === 'seconds'
             ? 'intervalo em segundos: granularidade fina demais para conferir'
             : 'regra não reconhecida pelo avaliador',
-          esperado: null, cumpridas: null, perdidas: [], atrasoMedioSeg: null, ultimaExec: execs.at(-1)?.startedAt ?? null,
+          esperado: null, cumpridas: null, perdidas: [], atrasoMedioSeg: null,
+          ultimaExec: execs.at(-1)?.startedAt ?? null,
         })
         continue
       }
@@ -406,7 +487,7 @@ async function conferirAgendamentos() {
       // ATENCAO A RETENCAO. Esta instancia guarda pouca execucao: o grosso do que
       // rodou ha mais de uma ou duas horas ja foi podado. Contar essas ocorrencias
       // como "perdidas" inventa falha - foi o que a primeira versao deste codigo
-      // fez, reportando 66 de 72 perdidas num job que estava saudavel.
+      // fez, reportando 66 de 72 perdidas num job saudavel.
       // Logo: so julgamos o intervalo em que EXISTE execucao retida como prova.
       const inativo = !wf.active || g.desativado
       const horizonte = execs.length
@@ -415,8 +496,7 @@ async function conferirAgendamentos() {
 
       if (!inativo && horizonte === null) {
         linhas.push({
-          fluxo: wf.name, workflowId: wf.id, no: g.no, regra: desc, fuso: tz,
-          ativo: Boolean(wf.active), desativado: g.desativado,
+          ...comum,
           veredito: 'sem-dados',
           detalhe: 'nenhuma execução retida na janela — a retenção do banco não permite afirmar se rodou',
           esperado: null, cumpridas: null, perdidas: [], totalPerdidas: 0, extras: 0,
@@ -441,8 +521,7 @@ async function conferirAgendamentos() {
 
       const atrasos = cmp.cumpridas.map((c) => c.atrasoSeg)
       linhas.push({
-        fluxo: wf.name, workflowId: wf.id, no: g.no, regra: desc, fuso: tz,
-        ativo: Boolean(wf.active), desativado: g.desativado,
+        ...comum,
         veredito,
         janelaVerificadaHoras: inativo ? null : Number(((fim - de) / 3600000).toFixed(1)),
         esperado: cobraveis.length,
@@ -457,18 +536,96 @@ async function conferirAgendamentos() {
     }
   }
 
-  const ordem = { 'nunca-executou': 0, 'com-falhas': 1, 'sem-dados': 2, 'nao-comparavel': 3, ok: 4, 'sem-janela': 5, inativo: 6 }
-  linhas.sort((a, b) => (ordem[a.veredito] ?? 9) - (ordem[b.veredito] ?? 9) || (b.totalPerdidas ?? 0) - (a.totalPerdidas ?? 0))
+  cacheCron.set(inst.id, { em: Date.now(), linhas })
+  return linhas
+}
 
-  cacheCron = { em: Date.now(), dados: { ok: true, janelaHoras: config.horasCron, toleranciaMin: config.toleranciaMin, fusoPadrao: config.fuso, linhas } }
-  return cacheCron.dados
+const ORDEM_VER = {
+  'nunca-executou': 0, 'com-falhas': 1, 'sem-dados': 2, 'nao-comparavel': 3,
+  ok: 4, 'sem-janela': 5, inativo: 6,
+}
+
+async function conferirAgendamentos() {
+  const ativas = instanciasAtivas()
+  const lotes = await Promise.all(ativas.map(async (inst) => {
+    try { return await cronDaInstancia(inst) } catch { return [] }
+  }))
+  const linhas = lotes.flat().sort(
+    (a, b) => (ORDEM_VER[a.veredito] ?? 9) - (ORDEM_VER[b.veredito] ?? 9)
+      || (b.totalPerdidas ?? 0) - (a.totalPerdidas ?? 0)
+  )
+  return {
+    ok: true,
+    janelaHoras: config.horasCron,
+    toleranciaMin: config.toleranciaMin,
+    fusoPadrao: config.fuso,
+    linhas,
+  }
+}
+
+// ------------------------------------------------- uptime kuma (cache curto)
+
+let cacheUptime = { em: 0, dados: null }
+
+async function uptimeAtual(forcar = false) {
+  const cfg = config.uptimeKuma
+  if (!cfg?.ativo) return { ok: false, motivo: 'desligado' }
+  if (!forcar && Date.now() - cacheUptime.em < 20000 && cacheUptime.dados) return cacheUptime.dados
+  const d = await coletarUptime(cfg)
+  if (d.ok) d.dominios = await rdap.enriquecer(d.monitores)
+  cacheUptime = { em: Date.now(), dados: d }
+  return d
+}
+
+// ----------------------------------------- estado completo e coleta continua
+
+let cacheCompleto = { em: 0, dados: null }
+let coletaEmCurso = null
+
+async function coletarCompleto(forcar = false) {
+  if (!forcar && cacheCompleto.dados && Date.now() - cacheCompleto.em < 8000) return cacheCompleto.dados
+  if (coletaEmCurso) return coletaEmCurso
+  coletaEmCurso = (async () => {
+    const [estado, cron, uptime] = await Promise.all([
+      montarEstado(),
+      conferirAgendamentos().catch((e) => ({ ok: false, motivo: 'erro', detalhe: String(e.message || e), linhas: [] })),
+      uptimeAtual(forcar).catch((e) => ({ ok: false, motivo: 'erro', detalhe: String(e.message || e) })),
+    ])
+    const alertasAtivos = montarAlertas(estado, cron, uptime)
+    const chaves = new Set(alertasAtivos.map((a) => a.chave))
+
+    let limpou = false
+    for (const chave of Object.keys(reconhecimentos)) {
+      if (!chaves.has(chave)) { delete reconhecimentos[chave]; limpou = true }
+    }
+    if (limpou) await salvarReconhecimentos()
+    await repoTarefas.resolverAusentes(chaves)
+
+    const alertas = alertasAtivos.filter((a) => {
+      const r = reconhecimentos[a.chave]
+      return !r || Number(a.magnitude || 1) > Number(r.magnitude || 1)
+    })
+    const dados = {
+      ...estado, cron, uptime, alertas, alertasAtivos: alertasAtivos.length,
+      reconhecimentos, tarefasAtivas: repoTarefas.chavesAtivas(),
+      tarefasContagem: repoTarefas.contagem(),
+    }
+    cacheCompleto = { em: Date.now(), dados }
+    webhook.processar(alertasAtivos).catch((e) => console.error('webhook:', e.message || e))
+    return dados
+  })()
+  try { return await coletaEmCurso } finally { coletaEmCurso = null }
+}
+
+function invalidarEstadoCompleto() {
+  cacheCompleto = { em: 0, dados: null }
 }
 
 // ------------------------------------------------- diagnostico copiavel
 
-// Os dados de execucao carregam segredos em texto puro (o token do RD esta
-// chumbado nos query params dos nos HTTP deste projeto). O dump que vai para a
-// area de transferencia e depois para um chat NAO pode levar isso.
+// Os dados de execucao carregam segredos em texto puro (tokens chumbados nos
+// query params dos nos HTTP). O dump que vai para a area de transferencia e
+// depois para um chat NAO pode levar isso.
 const CHAVE_SENSIVEL = /(token|apikey|api_key|secret|senha|password|authorization|cookie|bearer|credential)/i
 
 function redigir(valor, prof = 0) {
@@ -479,43 +636,31 @@ function redigir(valor, prof = 0) {
     for (const [k, v] of Object.entries(valor)) {
       if (CHAVE_SENSIVEL.test(k)) { saida[k] = '[REDIGIDO]'; continue }
       // {name: "token", value: "..."} - o padrao dos parametros do n8n
-      if (k === 'value' && CHAVE_SENSIVEL.test(String(valor.name ?? ''))) {
-        saida[k] = '[REDIGIDO]'
-        continue
-      }
+      if (k === 'value' && CHAVE_SENSIVEL.test(String(valor.name ?? ''))) { saida[k] = '[REDIGIDO]'; continue }
       saida[k] = redigir(v, prof + 1)
     }
     return saida
   }
   if (typeof valor === 'string') {
     if (/^ey[A-Za-z0-9_-]{20,}\./.test(valor)) return '[REDIGIDO:jwt]'
-    if (/^[0-9a-f]{24}$/i.test(valor) && valor.length === 24) return valor // id do RD, nao e segredo
     return valor
   }
   return valor
 }
 
-function acharFalha(runData) {
-  for (const [no, execs] of Object.entries(runData || {})) {
-    for (const ex of execs || []) {
-      if (ex?.error) return { no, erro: ex.error, tempo: ex.executionTime }
-    }
-  }
-  return null
-}
-
-function montarDiagnostico(meta, fluxo, exec) {
+function montarDiagnostico(meta, fluxo, exec, inst) {
   const rd = exec?.data?.resultData
   const falha = acharFalha(rd?.runData) || (rd?.error ? { no: rd.lastNodeExecuted, erro: rd.error } : null)
   const e = falha?.erro || {}
   const L = []
   L.push('## Erro no n8n')
   L.push('')
+  L.push(`- instancia: ${inst.nome} (\`${inst.id}\`)`)
   L.push(`- fluxo: ${fluxo} (\`${meta.workflowId}\`)`)
   L.push(`- execucao: \`${meta.id}\`  status: ${meta.status}  modo: ${meta.mode}`)
   L.push(`- inicio: ${meta.startedAt}  fim: ${meta.stoppedAt ?? '(nao terminou)'}`)
   L.push(`- no que falhou: **${falha?.no ?? rd?.lastNodeExecuted ?? '(desconhecido)'}**`)
-  L.push(`- url: ${config.baseUrl}/workflow/${meta.workflowId}/executions/${meta.id}`)
+  L.push(`- url: ${inst.baseUrl}/workflow/${meta.workflowId}/executions/${meta.id}`)
   L.push('')
   if (e.message || e.description || e.httpCode) {
     L.push('### Mensagem')
@@ -529,7 +674,11 @@ function montarDiagnostico(meta, fluxo, exec) {
   if (e.node) {
     L.push('### Nó (parâmetros, credenciais redigidas)')
     L.push('```json')
-    L.push(JSON.stringify(redigir({ name: e.node.name, type: e.node.type, typeVersion: e.node.typeVersion, retryOnFail: e.node.retryOnFail, maxTries: e.node.maxTries, onError: e.node.onError, parameters: e.node.parameters }), null, 2))
+    L.push(JSON.stringify(redigir({
+      name: e.node.name, type: e.node.type, typeVersion: e.node.typeVersion,
+      retryOnFail: e.node.retryOnFail, maxTries: e.node.maxTries,
+      onError: e.node.onError, parameters: e.node.parameters,
+    }), null, 2))
     L.push('```')
     L.push('')
   }
@@ -557,6 +706,25 @@ function montarDiagnostico(meta, fluxo, exec) {
   return L.join('\n')
 }
 
+// ---------------------------------------------- lista agregada (logs/dash)
+
+// Concatena as instancias ativas numa unica linha do tempo. Cada item ja carrega
+// `instancia`, entao a origem nunca se perde na mistura.
+async function recentesDeTodas(paginas = 10) {
+  const ativas = instanciasAtivas()
+  const lotes = await Promise.all(ativas.map(async (inst) => {
+    try { return await clienteDe(inst).listarRecentes(paginas) } catch { return null }
+  }))
+  const itens = lotes.filter(Boolean).flatMap((l) => l.itens)
+    .sort((a, b) => new Date(b.inicio || 0) - new Date(a.inicio || 0))
+  return {
+    itens,
+    // truncado = alguma instancia ficou sem ler tudo o que existe
+    truncado: lotes.filter(Boolean).some((l) => !l.cobriu),
+    falhas: ativas.filter((_, i) => !lotes[i]).map((i) => i.nome),
+  }
+}
+
 // ---------------------------------------------------------------- http
 
 function json(res, codigo, corpo) {
@@ -577,49 +745,160 @@ async function lerCorpo(req) {
   return JSON.parse(Buffer.concat(partes).toString('utf8') || '{}')
 }
 
+const semInstancia = () => !instanciasAtivas().length
+
 const servidor = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1')
 
   try {
+    if (url.pathname === '/api/health') {
+      return json(res, 200, { ok: true, uptimeSeg: Math.round(process.uptime()), coletaEm: cacheCompleto.dados?.momento || null })
+    }
+
+    // ---------------------------------------------------------- config
     if (url.pathname === '/api/config' && req.method === 'GET') {
+      const uk = config.uptimeKuma
       return json(res, 200, {
-        baseUrl: config.baseUrl,
-        temChave: Boolean(config.apiKey),
+        instancias: config.instancias.map(publica),
         ativo: config.ativo,
         caminhoConfig: ARQ_CONFIG,
+        notificacoes: config.notificacoes,
+        uptimeKuma: {
+          ativo: uk.ativo, baseUrl: uk.baseUrl, slug: uk.slug,
+          temToken: Boolean(uk.token), monitores: uk.monitores,
+          avisarCertDias: uk.avisarCertDias,
+        },
+        webhook: {
+          ativo: config.webhook.ativo, url: config.webhook.url,
+          temBearer: Boolean(config.webhook.bearer), ultimo: webhook.status(),
+        },
       })
     }
 
     if (url.pathname === '/api/config' && req.method === 'POST') {
       const corpo = await lerCorpo(req)
-      if (typeof corpo.baseUrl === 'string' && corpo.baseUrl.trim()) {
-        config.baseUrl = corpo.baseUrl.trim()
+
+      if (Array.isArray(corpo.instancias)) {
+        const antigas = new Map(config.instancias.map((i) => [i.id, i]))
+        config.instancias = corpo.instancias.map((cru, i) => {
+          const s = saneaInstancia(cru, i)
+          // Chave vazia = manter a atual. Nunca devolvemos o valor ao navegador,
+          // logo ele nao teria como reenviar o que ja esta salvo.
+          if (!s.apiKey) s.apiKey = antigas.get(s.id)?.apiKey || ''
+          return s
+        })
+        const vistos = new Set()
+        for (const inst of config.instancias) {
+          let id = inst.id, n = 2
+          while (vistos.has(id)) id = `${inst.id}-${n++}`
+          inst.id = id
+          vistos.add(id)
+        }
       }
-      // String vazia = manter a chave atual. Nunca devolvemos o valor.
-      if (typeof corpo.apiKey === 'string' && corpo.apiKey.trim()) {
-        config.apiKey = corpo.apiKey.trim()
-      }
+
       if (typeof corpo.ativo === 'boolean') config.ativo = corpo.ativo
-      cacheNomes.clear()
-      nomesEm = 0
+
+      if (corpo.notificacoes && typeof corpo.notificacoes === 'object') {
+        const n = corpo.notificacoes
+        config.notificacoes = {
+          toastSeg: Math.max(0, Math.min(600, Number(n.toastSeg ?? config.notificacoes.toastSeg))),
+          navegador: Boolean(n.navegador),
+          som: Boolean(n.som),
+          volume: Math.max(0, Math.min(1, Number(n.volume ?? config.notificacoes.volume))),
+        }
+      }
+
+      if (corpo.uptimeKuma && typeof corpo.uptimeKuma === 'object') {
+        const u = corpo.uptimeKuma
+        const atual = config.uptimeKuma
+        config.uptimeKuma = {
+          ativo: typeof u.ativo === 'boolean' ? u.ativo : atual.ativo,
+          baseUrl: typeof u.baseUrl === 'string' ? u.baseUrl.trim().replace(/\/+$/, '') : atual.baseUrl,
+          // token vazio = manter o atual, mesma regra das chaves do n8n
+          token: typeof u.token === 'string' && u.token.trim() ? u.token.trim() : atual.token,
+          slug: typeof u.slug === 'string' ? u.slug.trim() : atual.slug,
+          monitores: u.monitores && typeof u.monitores === 'object' ? u.monitores : atual.monitores,
+          avisarCertDias: Math.max(1, Math.min(365, Number(u.avisarCertDias ?? atual.avisarCertDias))),
+        }
+        cacheUptime = { em: 0, dados: null }
+      }
+
+      if (corpo.webhook && typeof corpo.webhook === 'object') {
+        const w = corpo.webhook
+        const atual = config.webhook
+        config.webhook = {
+          ativo: typeof w.ativo === 'boolean' ? w.ativo : atual.ativo,
+          url: typeof w.url === 'string' ? w.url.trim() : atual.url,
+          bearer: typeof w.bearer === 'string' && w.bearer.trim() ? w.bearer.trim() : atual.bearer,
+        }
+      }
+
+      descartarClientes()
+      cacheCron.clear()
+      invalidarEstadoCompleto()
       await salvarConfig()
-      return json(res, 200, { salvo: true, temChave: Boolean(config.apiKey), ativo: config.ativo })
+      return json(res, 200, { salvo: true, instancias: config.instancias.map(publica) })
     }
 
     if (url.pathname === '/api/teste' && req.method === 'POST') {
+      const corpo = await lerCorpo(req)
+      const salva = corpo.id ? instanciaPorId(corpo.id) : null
+      const alvo = (corpo.baseUrl || corpo.apiKey)
+        ? saneaInstancia({ ...salva, ...corpo, apiKey: corpo.apiKey || salva?.apiKey || '' }, 0)
+        : (salva || instanciasAtivas()[0])
+      if (!alvo) return json(res, 200, { ok: false, erro: 'instância não encontrada' })
       try {
-        await chamarN8n('/api/v1/workflows?limit=1')
-        return json(res, 200, { ok: true })
+        await criarCliente(alvo).chamar('/api/v1/workflows?limit=1')
+        return json(res, 200, { ok: true, nome: alvo.nome })
       } catch (e) {
-        return json(res, 200, { ok: false, erro: String(e.message || e) })
+        return json(res, 200, { ok: false, nome: alvo.nome, erro: String(e.message || e) })
       }
     }
 
+    // ---------------------------------------------------------- uptime kuma
+    if (url.pathname === '/api/uptime') {
+      try {
+        return json(res, 200, await uptimeAtual(Boolean(url.searchParams.get('recarregar'))))
+      } catch (e) {
+        return json(res, 200, { ok: false, motivo: 'erro', detalhe: String(e.message || e) })
+      }
+    }
+
+    // Teste de conexao da aba de config: le com os dados ENVIADOS, sem salvar,
+    // para o usuario conferir antes de gravar. Token vazio usa o token salvo.
+    if (url.pathname === '/api/uptime/teste' && req.method === 'POST') {
+      const c = await lerCorpo(req)
+      const cfg = {
+        baseUrl: String(c.baseUrl || config.uptimeKuma.baseUrl || '').trim().replace(/\/+$/, ''),
+        token: String(c.token || '').trim() || config.uptimeKuma.token,
+        slug: String(c.slug ?? config.uptimeKuma.slug ?? '').trim(),
+        monitores: config.uptimeKuma.monitores,
+        avisarCertDias: config.uptimeKuma.avisarCertDias,
+      }
+      try {
+        const d = await coletarUptime(cfg)
+        if (d.ok) d.dominios = await rdap.enriquecer(d.monitores)
+        return json(res, 200, d)
+      } catch (e) {
+        return json(res, 200, { ok: false, motivo: 'erro', detalhe: String(e.message || e) })
+      }
+    }
+
+    if (url.pathname === '/api/webhook/teste' && req.method === 'POST') {
+      const c = await lerCorpo(req)
+      const cfg = {
+        url: String(c.url || config.webhook.url || '').trim(),
+        bearer: String(c.bearer || '').trim() || config.webhook.bearer,
+      }
+      return json(res, 200, await webhook.testar(cfg))
+    }
+
+    // ---------------------------------------------------------- estado
     if (url.pathname === '/api/state') {
       if (!config.ativo) return json(res, 200, { ok: false, motivo: 'pausado' })
-      if (!config.apiKey) return json(res, 200, { ok: false, motivo: 'sem-chave' })
+      if (semInstancia() && !config.uptimeKuma.ativo) return json(res, 200, { ok: false, motivo: 'sem-chave' })
       try {
-        return json(res, 200, await montarEstado())
+        return json(res, 200, await coletarCompleto(Boolean(url.searchParams.get('recarregar'))))
       } catch (e) {
         return json(res, 200, { ok: false, motivo: 'erro-api', detalhe: String(e.message || e) })
       }
@@ -628,25 +907,86 @@ const servidor = createServer(async (req, res) => {
     if (url.pathname === '/api/reconhecer' && req.method === 'POST') {
       const c = await lerCorpo(req)
       if (!c.chave) return json(res, 400, { ok: false, erro: 'falta chave' })
-      if (!c.estado) delete reconhecimentos[c.chave]
-      else reconhecimentos[c.chave] = {
-        estado: c.estado === 'analise' ? 'analise' : 'resolvido',
-        magnitude: Number(c.magnitude ?? 1),
-        em: new Date().toISOString(),
+
+      if (!c.estado) {
+        delete reconhecimentos[c.chave]
+        await repoTarefas.remover(c.chave)
+      } else if (c.estado === 'analise') {
+        // "Em analise" MOVE para Tarefas: o alerta sai do Monitor e passa a ter
+        // estado proprio. O reconhecimento continua sendo gravado porque e ele
+        // que guarda a magnitude — se o erro crescer alem do que foi visto, o
+        // alerta reaparece mesmo havendo tarefa aberta.
+        reconhecimentos[c.chave] = {
+          estado: 'analise', magnitude: Number(c.magnitude ?? 1), em: new Date().toISOString(),
+        }
+        await repoTarefas.abrir({ ...(c.alerta || {}), chave: c.chave, magnitude: c.magnitude })
+      } else {
+        reconhecimentos[c.chave] = {
+          estado: 'resolvido', magnitude: Number(c.magnitude ?? 1), em: new Date().toISOString(),
+        }
+        webhook.resolver(c.alerta || { chave: c.chave }, 'manual').catch(() => {})
       }
+
       limparReconhecimentosVelhos()
       await salvarReconhecimentos()
-      return json(res, 200, { ok: true, reconhecimentos })
+      invalidarEstadoCompleto()
+      return json(res, 200, {
+        ok: true, reconhecimentos,
+        tarefasAtivas: repoTarefas.chavesAtivas(),
+        tarefasContagem: repoTarefas.contagem(),
+      })
+    }
+
+    // ---------------------------------------------------------- tarefas
+    if (url.pathname === '/api/tarefas' && req.method === 'GET') {
+      return json(res, 200, {
+        ok: true,
+        estados: ESTADOS_TAREFA,
+        itens: repoTarefas.lista(),
+        contagem: repoTarefas.contagem(),
+        instancias: config.instancias.map(publica),
+      })
+    }
+
+    if (url.pathname === '/api/tarefas' && req.method === 'POST') {
+      const c = await lerCorpo(req)
+      if (!c.chave) return json(res, 400, { ok: false, erro: 'falta chave' })
+
+      if (c.acao === 'remover') {
+        await repoTarefas.remover(c.chave)
+        delete reconhecimentos[c.chave]
+        await salvarReconhecimentos()
+      } else {
+        const t = await repoTarefas.mover(c.chave, normalizarEstado(c.estado), c.nota)
+        if (!t) return json(res, 404, { ok: false, erro: 'tarefa não encontrada' })
+        // Coerencia com o Monitor: tarefa resolvida silencia o alerta de vez;
+        // tarefa reaberta volta ao estado "em analise", que mantem o alerta fora
+        // do Monitor mas visivel aqui.
+        reconhecimentos[c.chave] = {
+          estado: t.estado === 'resolvido' ? 'resolvido' : 'analise',
+          magnitude: Number(t.magnitude || 1),
+          em: new Date().toISOString(),
+        }
+        await salvarReconhecimentos()
+        if (t.estado === 'resolvido') webhook.resolver(t, 'manual').catch(() => {})
+      }
+
+      invalidarEstadoCompleto()
+
+      return json(res, 200, {
+        ok: true, itens: repoTarefas.lista(), contagem: repoTarefas.contagem(),
+      })
     }
 
     // ---------------------------------------------------------- logs
     if (url.pathname === '/api/logs') {
-      if (!config.apiKey) return json(res, 200, { ok: false, motivo: 'sem-chave' })
-      const { itens, truncado } = await listarRecentes()
+      if (semInstancia()) return json(res, 200, { ok: false, motivo: 'sem-chave' })
+      const { itens, truncado, falhas } = await recentesDeTodas()
 
       const q = (url.searchParams.get('q') || '').trim().toLowerCase()
       const status = (url.searchParams.get('status') || '').split(',').filter(Boolean)
       const modo = (url.searchParams.get('modo') || '').split(',').filter(Boolean)
+      const insts = (url.searchParams.get('instancias') || '').split(',').filter(Boolean)
       const horas = Number(url.searchParams.get('horas') || 0)
       const pagina = Math.max(0, Number(url.searchParams.get('pagina') || 0))
       const porPagina = Math.min(500, Math.max(10, Number(url.searchParams.get('limite') || 100)))
@@ -655,6 +995,7 @@ const servidor = createServer(async (req, res) => {
       const filtrados = itens.filter((e) => {
         if (status.length && !status.includes(e.status)) return false
         if (modo.length && !modo.includes(e.modo)) return false
+        if (insts.length && !insts.includes(e.instanciaId)) return false
         if (corte && (!e.inicio || new Date(e.inicio).getTime() < corte)) return false
         if (!q) return true
         // busca por nome do fluxo ou por id da execucao
@@ -663,37 +1004,38 @@ const servidor = createServer(async (req, res) => {
 
       // facetas calculadas sobre o conjunto JA filtrado por busca/tempo, para os
       // contadores dos botoes baterem com o que o clique vai produzir
-      const porStatus = {}, porModo = {}
+      const porStatus = {}, porModo = {}, porInstancia = {}
       for (const e of filtrados) {
         porStatus[e.status] = (porStatus[e.status] || 0) + 1
         porModo[e.modo] = (porModo[e.modo] || 0) + 1
+        porInstancia[e.instanciaId] = (porInstancia[e.instanciaId] || 0) + 1
       }
 
       return json(res, 200, {
         ok: true,
         total: filtrados.length,
         universo: itens.length,
-        truncado,
-        pagina,
-        porPagina,
-        porStatus,
-        porModo,
-        baseUrl: config.baseUrl,
+        truncado, falhas,
+        pagina, porPagina,
+        porStatus, porModo, porInstancia,
+        instancias: config.instancias.map(publica),
         itens: filtrados.slice(pagina * porPagina, (pagina + 1) * porPagina),
       })
     }
 
     // ---------------------------------------------------------- dashboard
     if (url.pathname === '/api/dashboard') {
-      if (!config.apiKey) return json(res, 200, { ok: false, motivo: 'sem-chave' })
+      if (semInstancia()) return json(res, 200, { ok: false, motivo: 'sem-chave' })
       const horas = Math.min(168, Math.max(1, Number(url.searchParams.get('horas') || 24)))
       // 250 execuções por página; quanto maior a janela, mais fundo é preciso ler
       const paginas = horas <= 2 ? 10 : horas <= 12 ? 30 : 60
-      const { itens, truncado } = await listarRecentes(paginas)
+      const { itens, truncado } = await recentesDeTodas(paginas)
 
+      const insts = (url.searchParams.get('instancias') || '').split(',').filter(Boolean)
       const agora = Date.now()
       const corte = agora - horas * 3600000
       const janela = itens.filter((e) => e.inicio && new Date(e.inicio).getTime() >= corte)
+        .filter((e) => !insts.length || insts.includes(e.instanciaId))
 
       // baldes por hora (ou por minuto quando a janela e curta)
       const passoMin = horas <= 2 ? 1 : horas <= 12 ? 10 : 60
@@ -708,31 +1050,38 @@ const servidor = createServer(async (req, res) => {
         if (b) b[ehErro(e.status) ? 'erro' : 'ok']++
       }
 
+      // A chave agrega por instancia + fluxo: somar dois fluxos homonimos de
+      // instancias diferentes numa linha so inventaria um volume que nao existe.
       const porFluxo = new Map()
       for (const e of janela) {
-        const v = porFluxo.get(e.workflowId) || {
-          workflowId: e.workflowId, fluxo: e.fluxo, total: 0, erros: 0, duracoes: [],
+        const k = `${e.instanciaId}|${e.workflowId}`
+        const v = porFluxo.get(k) || {
+          workflowId: e.workflowId, fluxo: e.fluxo,
+          instanciaId: e.instanciaId, instancia: e.instancia,
+          total: 0, erros: 0, duracoes: [],
         }
         v.total++
         if (ehErro(e.status)) v.erros++
         if (e.duracaoMs != null) v.duracoes.push(e.duracaoMs)
-        porFluxo.set(e.workflowId, v)
+        porFluxo.set(k, v)
       }
       const fluxos = [...porFluxo.values()].map((f) => ({
-        workflowId: f.workflowId, fluxo: f.fluxo, total: f.total, erros: f.erros,
+        workflowId: f.workflowId, fluxo: f.fluxo,
+        instanciaId: f.instanciaId, instancia: f.instancia,
+        total: f.total, erros: f.erros,
         taxaErro: f.total ? f.erros / f.total : 0,
         medianaMs: percentil(f.duracoes, 50),
         p95Ms: percentil(f.duracoes, 95),
       }))
 
-      const porStatus = {}, porModo = {}
+      const porStatus = {}, porModo = {}, porInstancia = {}
       for (const e of janela) {
         porStatus[e.status] = (porStatus[e.status] || 0) + 1
         porModo[e.modo] = (porModo[e.modo] || 0) + 1
+        porInstancia[e.instanciaId] = (porInstancia[e.instanciaId] || 0) + 1
       }
       const duracoes = janela.map((e) => e.duracaoMs).filter((d) => d != null)
       const erros = janela.filter((e) => ehErro(e.status)).length
-
       const maisAntiga = janela.length ? janela[janela.length - 1].inicio : null
 
       return json(res, 200, {
@@ -751,18 +1100,18 @@ const servidor = createServer(async (req, res) => {
           p95Ms: percentil(duracoes, 95),
         },
         serie: [...baldes.values()],
-        porStatus, porModo,
+        porStatus, porModo, porInstancia,
+        instancias: config.instancias.map(publica),
         volume: fluxos.slice().sort((a, b) => b.total - a.total).slice(0, 12),
         falhas: fluxos.filter((f) => f.erros).sort((a, b) => b.erros - a.erros).slice(0, 12),
         lentos: fluxos.filter((f) => f.p95Ms != null).sort((a, b) => b.p95Ms - a.p95Ms).slice(0, 12),
-        baseUrl: config.baseUrl,
       })
     }
 
     if (url.pathname === '/api/cron') {
-      if (!config.apiKey) return json(res, 200, { ok: false, motivo: 'sem-chave' })
+      if (semInstancia()) return json(res, 200, { ok: false, motivo: 'sem-chave' })
       try {
-        if (url.searchParams.get('recarregar')) cacheCron = { em: 0, dados: null }
+        if (url.searchParams.get('recarregar')) cacheCron.clear()
         return json(res, 200, await conferirAgendamentos())
       } catch (e) {
         return json(res, 200, { ok: false, motivo: 'erro-api', detalhe: String(e.message || e) })
@@ -772,13 +1121,17 @@ const servidor = createServer(async (req, res) => {
     if (url.pathname === '/api/execucao') {
       const id = url.searchParams.get('id')
       if (!id) return json(res, 400, { ok: false, erro: 'falta id' })
+      // Sem a instancia nao ha como saber a QUEM pedir a execucao: os ids sao
+      // locais. Na duvida cai na primeira ativa, que era o comportamento antigo.
+      const inst = instanciaPorId(url.searchParams.get('instancia')) || instanciasAtivas()[0]
+      if (!inst) return json(res, 200, { ok: false, erro: 'nenhuma instância ativa' })
       try {
-        const exec = await chamarN8n(`/api/v1/executions/${encodeURIComponent(id)}?includeData=true`)
-        const fluxo = await nomeDeFluxo(exec.workflowId)
+        const cli = clienteDe(inst)
+        const exec = await cli.chamar(`/api/v1/executions/${encodeURIComponent(id)}?includeData=true`)
+        const fluxo = await cli.nomeDeFluxo(exec.workflowId)
         return json(res, 200, {
-          ok: true,
-          fluxo,
-          diagnostico: montarDiagnostico(exec, fluxo, exec),
+          ok: true, fluxo, instancia: inst.nome,
+          diagnostico: montarDiagnostico(exec, fluxo, exec, inst),
         })
       } catch (e) {
         return json(res, 200, { ok: false, erro: String(e.message || e) })
@@ -786,7 +1139,12 @@ const servidor = createServer(async (req, res) => {
     }
 
     // ---------------------------------------------------------- estaticos
-    const PAGINAS = { '/': 'index.html', '/dashboard': 'dashboard.html', '/logs': 'logs.html' }
+    const PAGINAS = {
+      '/': 'index.html',
+      '/dashboard': 'dashboard.html',
+      '/logs': 'logs.html',
+      '/tarefas': 'tarefas.html',
+    }
     const TIPOS = {
       '.html': 'text/html; charset=utf-8',
       '.css': 'text/css; charset=utf-8',
@@ -820,9 +1178,33 @@ const servidor = createServer(async (req, res) => {
 
 await carregarConfig()
 await carregarReconhecimentos()
+await repoTarefas.carregar()
+await webhook.carregar()
 limparReconhecimentosVelhos()
-servidor.listen(PORTA, '127.0.0.1', () => {
-  console.log(`painel n8n em http://127.0.0.1:${PORTA}`)
+const timerColeta = setInterval(() => {
+  if (config.ativo && (instanciasAtivas().length || config.uptimeKuma.ativo)) {
+    coletarCompleto(true).catch((e) => console.error('coleta:', e.message || e))
+  }
+}, 10000)
+timerColeta.unref()
+
+servidor.listen(PORTA, HOST, () => {
+  console.log(`painel n8n em http://${HOST}:${PORTA}`)
   console.log(`config: ${ARQ_CONFIG}`)
-  console.log(`chave configurada: ${config.apiKey ? 'sim' : 'nao'}`)
+  for (const i of config.instancias) {
+    console.log(`  instancia "${i.nome}" (${i.id}) ${i.ativo ? 'ativa' : 'inativa'} · chave: ${i.apiKey ? 'sim' : 'nao'} · ${i.baseUrl}`)
+  }
+  if (config.uptimeKuma.ativo) console.log(`uptime kuma: ${config.uptimeKuma.baseUrl}`)
 })
+
+let encerrando = false
+function encerrar(sinal) {
+  if (encerrando) return
+  encerrando = true
+  clearInterval(timerColeta)
+  console.log(`encerrando (${sinal})`)
+  servidor.close(() => process.exit(0))
+  setTimeout(() => process.exit(1), 10000).unref()
+}
+process.on('SIGTERM', () => encerrar('SIGTERM'))
+process.on('SIGINT', () => encerrar('SIGINT'))

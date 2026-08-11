@@ -34,11 +34,13 @@
   <div class="topo">
     <nav class="nav">
       <a href="/">Monitor</a>
+      <a href="/tarefas">Tarefas</a>
       <a href="/dashboard" class="atual">Dashboard</a>
       <a href="/logs">Logs</a>
     </nav>
     <span id="status"><span class="ponto"></span><span id="statusNome">carregando</span></span>
     <span class="cresce"></span>
+    <div class="grupo" id="fInst"></div>
     <div class="grupo" id="periodo"></div>
     <button id="btCopiar">Copiar resumo</button>
   </div>
@@ -97,7 +99,7 @@ const rotulo = i => {
     : d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})
 }
 
-let horas = 24, ultimo = null
+let horas = 24, ultimo = null, instancias = new Set()
 function pintarStatus(n,r){ $('#status').className=n; $('#statusNome').textContent=r }
 
 function periodos(){
@@ -151,17 +153,25 @@ function tabela(alvo, linhas, colunas, maxV){
     linhas.map(l=>'<tr>'+colunas.map(c=>c.f(l,maxV)).join('')+'</tr>').join('')+'</tbody>'
 }
 
-const celFluxo = l => `<td><a href="${esc(ultimo.baseUrl)}/workflow/${esc(l.workflowId)}" target="_blank">${esc(l.fluxo)}</a></td>`
+const baseDe = id => ultimo.instancias.find(i=>i.id===id)?.baseUrl || ''
+const celFluxo = l => `<td><a href="${esc(baseDe(l.instanciaId))}/workflow/${esc(l.workflowId)}" target="_blank">${esc(l.fluxo)}</a><div class="sub2"><span class="tag">${esc(l.instancia)}</span></div></td>`
+
+function filtrosInst(d){
+  $('#fInst').innerHTML=d.instancias.length>1?'<span class="meta">instâncias</span>'+d.instancias.map(i=>`<button class="tag ${instancias.has(i.id)?'on':''}" data-inst="${esc(i.id)}">${esc(i.nome)}</button>`).join(''):''
+  document.querySelectorAll('[data-inst]').forEach(b=>b.onclick=()=>{instancias.has(b.dataset.inst)?instancias.delete(b.dataset.inst):instancias.add(b.dataset.inst);puxar()})
+}
 
 async function puxar(){
   try{
-    const d = await (await fetch('/api/dashboard?horas='+horas,{cache:'no-store'})).json()
+    const p=new URLSearchParams({horas:String(horas)});if(instancias.size)p.set('instancias',[...instancias].join(','))
+    const d = await (await fetch('/api/dashboard?'+p,{cache:'no-store'})).json()
     if(!d.ok){
       pintarStatus('ruim', d.motivo==='sem-chave'?'não configurado':'sem dados')
       return
     }
     pintarStatus('ok','conectado')
     ultimo = d
+    filtrosInst(d)
     nums(d.kpis, d)
     $('#passo').textContent = d.passoMin >= 60 ? 'por hora' : `por ${d.passoMin} min`
     grafico(d.serie)
