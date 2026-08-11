@@ -5,9 +5,11 @@
 [![MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Node 20+](https://img.shields.io/badge/node-20%2B-339933.svg)](https://nodejs.org/)
 
-<img width="1621" height="760" alt="Monitor n8n" src="https://github.com/user-attachments/assets/c7f639e0-6f10-44f6-8da6-00cf63a49c07" />
+<img width="1621" height="760" alt="Monitor unificado para n8n e Uptime Kuma" src="https://github.com/user-attachments/assets/c7f639e0-6f10-44f6-8da6-00cf63a49c07" />
 
-Painel operacional para detectar rapidamente erros, execuções travadas, agendamentos perdidos e indisponibilidade de serviços. Funciona com várias instâncias n8n, integra Uptime Kuma e mantém o tratamento dos incidentes em uma fila de Tarefas.
+**Monitor unificado para n8n + Uptime Kuma.**
+
+O projeto reúne em uma única interface a saúde das automações e a disponibilidade dos serviços. No n8n, detecta erros, execuções travadas e agendamentos perdidos em múltiplas instâncias. No Uptime Kuma, acompanha monitores online e offline, manutenção, tempo de resposta, uptime, certificados TLS e expiração de domínios. Os incidentes das duas fontes aparecem no mesmo Monitor e podem ser tratados em uma fila de Tarefas.
 
 Node.js puro, sem dependências npm, framework ou etapa de build.
 
@@ -42,7 +44,7 @@ cd n8n-monitor
 npm start
 ```
 
-Abra `http://127.0.0.1:8787`, entre em **Configurações** e adicione uma instância n8n.
+Abra `http://127.0.0.1:8787`, entre em **Configurações**, adicione suas instâncias n8n e conecte o Uptime Kuma pela URL e API key.
 
 ### Docker Compose
 
