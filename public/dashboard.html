@@ -79,9 +79,11 @@
   </div>
 </div>
 
+<script src="/i18n.js"></script>
 <script>
 const $ = s => document.querySelector(s)
-const nf = n => new Intl.NumberFormat('pt-BR').format(n)
+const tr = (s,v) => I18n.t(s,v)
+const nf = n => new Intl.NumberFormat(I18n.locale()).format(n)
 const pc = n => (n*100).toFixed(n >= 0.1 ? 0 : 1) + '%'
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
 const dms = ms => {
@@ -95,8 +97,8 @@ const dms = ms => {
 const rotulo = i => {
   const d = new Date(i)
   return ultimo && ultimo.passoMin >= 60
-    ? d.toLocaleString('pt-BR',{day:'2-digit',hour:'2-digit'}).replace(',','')
-    : d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})
+    ? d.toLocaleString(I18n.locale(),{day:'2-digit',hour:'2-digit'}).replace(',','')
+    : d.toLocaleTimeString(I18n.locale(),{hour:'2-digit',minute:'2-digit'})
 }
 
 let horas = 24, ultimo = null, instancias = new Set()
@@ -180,9 +182,9 @@ async function puxar(){
     // retenção já apagou. O aviso evita ler o gráfico como se fosse o período.
     const pedido = horas, real = d.coberturaHoras
     $('#avisoCobertura').innerHTML = (real && real < pedido * 0.9)
-      ? `<div class="aviso">Período pedido: ${pedido}h. O banco só guarda <b>${real}h</b> de execuções —
-         os números abaixo cobrem esse intervalo, não o período inteiro.
-         Aumente <code>EXECUTIONS_DATA_PRUNE_MAX_COUNT</code> para enxergar mais longe.</div>`
+      ? `<div class="aviso">${tr('Período pedido: {pedido}h. O banco só guarda',{pedido})} <b>${real}h</b> ${tr('de execuções')} —
+         ${tr('os números abaixo cobrem esse intervalo, não o período inteiro.')}
+         ${tr('Aumente EXECUTIONS_DATA_PRUNE_MAX_COUNT para enxergar mais longe.').replace('EXECUTIONS_DATA_PRUNE_MAX_COUNT','<code>EXECUTIONS_DATA_PRUNE_MAX_COUNT</code>')}</div>`
       : ''
 
     const maxTotal = Math.max(1, ...d.volume.map(f=>f.total))
@@ -210,14 +212,14 @@ async function puxar(){
 $('#btCopiar').onclick = async ev => {
   if(!ultimo) return
   const k = ultimo.kpis
-  const L = [`# Dashboard n8n — últimas ${ultimo.horas}h`, '',
-    `Cobertura real do banco: ${ultimo.coberturaHoras}h`, '',
-    `- execuções: ${nf(k.total)} · erros: ${nf(k.erros)} (${pc(k.taxaErro)})`,
-    `- fluxos ativos: ${nf(k.fluxosAtivos)}`,
-    `- duração mediana: ${dms(k.medianaMs)} · p95: ${dms(k.p95Ms)}`, '',
-    '## Maior volume', ...ultimo.volume.map(f=>`- ${f.fluxo}: ${nf(f.total)} exec, ${pc(f.taxaErro)} erro`), '',
-    '## Mais falhas', ...(ultimo.falhas.length?ultimo.falhas.map(f=>`- ${f.fluxo}: ${nf(f.erros)} erros de ${nf(f.total)} (${pc(f.taxaErro)})`):['- nenhum']), '',
-    '## Mais lentos (p95)', ...ultimo.lentos.map(f=>`- ${f.fluxo}: p95 ${dms(f.p95Ms)}, mediana ${dms(f.medianaMs)}`)]
+  const L = [`# Dashboard n8n — ${tr('últimas')} ${ultimo.horas}h`, '',
+    `${tr('Cobertura real do banco')}: ${ultimo.coberturaHoras}h`, '',
+    `- ${tr('execuções')}: ${nf(k.total)} · ${tr('erros')}: ${nf(k.erros)} (${pc(k.taxaErro)})`,
+    `- ${tr('fluxos ativos')}: ${nf(k.fluxosAtivos)}`,
+    `- ${tr('duração mediana')}: ${dms(k.medianaMs)} · p95: ${dms(k.p95Ms)}`, '',
+    `## ${tr('Maior volume')}`, ...ultimo.volume.map(f=>`- ${f.fluxo}: ${nf(f.total)} exec, ${pc(f.taxaErro)} ${tr('erro')}`), '',
+    `## ${tr('Mais falhas')}`, ...(ultimo.falhas.length?ultimo.falhas.map(f=>`- ${f.fluxo}: ${nf(f.erros)} ${tr('erros')} de ${nf(f.total)} (${pc(f.taxaErro)})`):['- '+tr('nenhum')]), '',
+    `## ${tr('Mais lentos')} (p95)`, ...ultimo.lentos.map(f=>`- ${f.fluxo}: p95 ${dms(f.p95Ms)}, ${tr('Mediana').toLowerCase()} ${dms(f.medianaMs)}`)]
   const t = L.join('\n')
   try{ await navigator.clipboard.writeText(t) }
   catch{ const x=document.createElement('textarea'); x.value=t; document.body.appendChild(x); x.select(); document.execCommand('copy'); x.remove() }

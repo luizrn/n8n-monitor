@@ -23,6 +23,7 @@ test('health responde e migra configuracao legada sem expor chave', async (t) =>
   assert.equal((await (await fetch(`http://127.0.0.1:${s.porta}/api/health`)).json()).ok, true)
   const cfg = await (await fetch(`http://127.0.0.1:${s.porta}/api/config`)).json()
   assert.equal(cfg.instancias[0].nome, 'Principal')
+  assert.equal(cfg.idioma, 'pt-BR')
   assert.equal(cfg.instancias[0].temChave, true)
   const publicado = JSON.stringify(cfg)
   assert.ok(!publicado.includes('segredo'))
@@ -36,6 +37,13 @@ test('health responde e migra configuracao legada sem expor chave', async (t) =>
   assert.equal(destino.temDiscordUrl, true)
 })
 
+test('ignora destino legado vazio para iniciar a aba de envio sem exemplo', async (t) => {
+  const s = await subir({ webhook: { ativo: false, url: '', metodo: 'POST' } })
+  t.after(async () => { s.proc.kill('SIGTERM'); await rm(s.dir, { recursive: true, force: true }) })
+  const cfg = await (await fetch(`http://127.0.0.1:${s.porta}/api/config`)).json()
+  assert.deepEqual(cfg.webhook.destinos, [])
+})
+
 test('salva varios destinos e preserva segredos omitidos', async (t) => {
   const s = await subir()
   t.after(async () => { s.proc.kill('SIGTERM'); await rm(s.dir, { recursive: true, force: true }) })
@@ -44,12 +52,13 @@ test('salva varios destinos e preserva segredos omitidos', async (t) => {
     { id: 'hook', nome: 'Incidentes', ativo: true, modo: 'webhook', url: 'https://hook', bearer: 'bearer-secreto' },
     { id: 'zap', nome: 'Plantão', ativo: true, modo: 'evolution', evolutionUrl: 'https://evo', evolutionInstancia: 'principal', evolutionApiKey: 'evo-secreta', evolutionNumero: '5565999999999' },
   ]
-  let r = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ webhook: { destinos } }) })
+  let r = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idioma: 'en', webhook: { destinos } }) })
   assert.equal(r.ok, true)
   r = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ webhook: { destinos: destinos.map((d) => ({ ...d, bearer: '', evolutionApiKey: '' })) } }) })
   assert.equal(r.ok, true)
 
   const cfg = await (await fetch(endpoint)).json()
+  assert.equal(cfg.idioma, 'en')
   assert.deepEqual(cfg.webhook.destinos.map((d) => d.id), ['hook', 'zap'])
   assert.equal(cfg.webhook.destinos[0].temBearer, true)
   assert.equal(cfg.webhook.destinos[1].temEvolutionApiKey, true)

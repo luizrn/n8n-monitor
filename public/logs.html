@@ -91,11 +91,13 @@
   <div class="mono" id="dlgCorpo">carregando…</div>
 </div></dialog>
 
+<script src="/i18n.js"></script>
 <script>
 const $ = s => document.querySelector(s)
-const nf = n => new Intl.NumberFormat('pt-BR').format(n)
+const tr = s => I18n.t(s)
+const nf = n => new Intl.NumberFormat(I18n.locale()).format(n)
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
-const dh = i => i ? new Date(i).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—'
+const dh = i => i ? new Date(i).toLocaleString(I18n.locale(),{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—'
 const dms = ms => {
   if (ms == null) return '—'
   if (ms < 1000) return ms + 'ms'
@@ -191,9 +193,9 @@ $('#btMais').onclick = () => { estado.pagina++; buscar(true) }
 $('#btAtualizar').onclick = () => aplicar()
 
 $('#btCopiar').onclick = async ev => {
-  const L = ['# Execuções n8n', '',
-    `filtro: ${estado.q||'(sem busca)'} · status: ${[...estado.status].join(',')||'todos'} · modo: ${[...estado.modo].join(',')||'todos'} · instâncias: ${[...estado.instancias].join(',')||'todas'} · período: ${estado.horas?estado.horas+'h':'tudo'}`,
-    '', '| execução | fluxo | instância | status | modo | início | duração |', '|---|---|---|---|---|---|---|']
+  const L = [tr('# Execuções n8n'), '',
+    `${tr('filtro')}: ${estado.q||tr('(sem busca)')} · status: ${[...estado.status].join(',')||tr('todos')} · ${tr('modo')}: ${[...estado.modo].join(',')||tr('todos')} · ${tr('instâncias')}: ${[...estado.instancias].join(',')||tr('todas')} · ${tr('período')}: ${estado.horas?estado.horas+'h':tr('tudo')}`,
+    '', tr('| execução | fluxo | instância | status | modo | início | duração |'), '|---|---|---|---|---|---|---|']
   for (const e of estado.itens) L.push(`| #${e.id} | ${e.fluxo} | ${e.instancia} | ${e.status} | ${e.modo} | ${dh(e.inicio)} | ${dms(e.duracaoMs)} |`)
   await copiar(L.join('\n'), ev.target)
 }
@@ -215,7 +217,7 @@ $('#tb').addEventListener('click', async ev => {
   ultimoDiag = ''
   $('#dlg').showModal()
   const d = await (await fetch('/api/execucao?id='+encodeURIComponent(id)+'&instancia='+encodeURIComponent(tr.dataset.inst))).json()
-  ultimoDiag = d.ok ? d.diagnostico : ('não foi possível montar o diagnóstico: ' + (d.erro||''))
+  ultimoDiag = d.ok ? d.diagnostico : (tr('não foi possível montar o diagnóstico: ') + (d.erro||''))
   $('#dlgCorpo').textContent = ultimoDiag
 })
 $('#btFechar').onclick = () => $('#dlg').close()

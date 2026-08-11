@@ -9,3 +9,10 @@ for (const arquivo of ['index.html', 'tarefas.html', 'dashboard.html', 'logs.htm
     for (const [, codigo] of scripts) new vm.Script(codigo, { filename: arquivo })
   })
 }
+
+for (const arquivo of ['i18n.js', 'toasts.js']) {
+  test(`${arquivo} possui sintaxe valida`, async () => {
+    const codigo = await readFile(new URL(`../public/${arquivo}`, import.meta.url), 'utf8')
+    new vm.Script(codigo, { filename: arquivo })
+  })
+}

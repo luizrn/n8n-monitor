@@ -72,6 +72,7 @@ const WEBHOOK_PADRAO = { destinos: [] }
 const PADRAO = {
   instancias: [],
   ativo: true,
+  idioma: 'pt-BR',
   fuso: 'America/Cuiaba',   // usado quando o workflow nao define timezone proprio
   horasCron: 24,            // janela da conferencia configurado-vs-executou
   toleranciaMin: 5,         // atraso aceito antes de considerar ocorrencia perdida
@@ -134,6 +135,14 @@ function saneaDestino(cru, i) {
   }
 }
 
+function destinoConfigurado(destino) {
+  return Boolean(
+    destino.ativo || destino.url || destino.bearer || destino.headerNome || destino.headerValor
+    || destino.evolutionUrl || destino.evolutionInstancia || destino.evolutionApiKey || destino.evolutionNumero
+    || destino.discordUrl,
+  )
+}
+
 function idsUnicos(itens) {
   const vistos = new Set()
   for (const item of itens) {
@@ -151,13 +160,14 @@ function idsUnicos(itens) {
 // usava o painel perca a configuracao ao atualizar.
 function migrar(cru) {
   const c = { ...PADRAO, ...cru }
+  if (!['pt-BR', 'en'].includes(c.idioma)) c.idioma = 'pt-BR'
   c.notificacoes = { ...NOTIF_PADRAO, ...(cru?.notificacoes || {}) }
   c.uptimeKuma = { ...UPTIME_PADRAO, ...(cru?.uptimeKuma || {}) }
   const webhookCru = cru?.webhook
   const destinosCrus = Array.isArray(webhookCru?.destinos)
     ? webhookCru.destinos
     : (webhookCru && typeof webhookCru === 'object' ? [{ ...webhookCru, id: 'destino-1' }] : [])
-  c.webhook = { destinos: idsUnicos(destinosCrus.map(saneaDestino)) }
+  c.webhook = { destinos: idsUnicos(destinosCrus.map(saneaDestino).filter(destinoConfigurado)) }
 
   if (!Array.isArray(c.instancias) || !c.instancias.length) {
     const url = String(cru?.baseUrl || process.env.N8N_BASE_URL || '').trim()
@@ -824,6 +834,7 @@ const servidor = createServer(async (req, res) => {
       return json(res, 200, {
         instancias: config.instancias.map(publica),
         ativo: config.ativo,
+        idioma: config.idioma,
         caminhoConfig: ARQ_CONFIG,
         notificacoes: config.notificacoes,
         uptimeKuma: {
@@ -857,6 +868,7 @@ const servidor = createServer(async (req, res) => {
       }
 
       if (typeof corpo.ativo === 'boolean') config.ativo = corpo.ativo
+      if (['pt-BR', 'en'].includes(corpo.idioma)) config.idioma = corpo.idioma
 
       if (corpo.notificacoes && typeof corpo.notificacoes === 'object') {
         const n = corpo.notificacoes
@@ -896,7 +908,7 @@ const servidor = createServer(async (req, res) => {
               evolutionApiKey: String(cru?.evolutionApiKey || '').trim() || anterior.evolutionApiKey,
               discordUrl: String(cru?.discordUrl || '').trim() || anterior.discordUrl,
             }, i)
-          })) }
+          }).filter(destinoConfigurado)) }
         }
       }
 
