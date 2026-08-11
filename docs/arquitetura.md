@@ -45,7 +45,7 @@ O diretório é `N8N_MONITOR_DATA_DIR`, `%LOCALAPPDATA%\n8n-monitor` ou `$HOME/n
 | `config.json` | instâncias e credenciais, notificações, Kuma e webhook |
 | `reconhecimentos.json` | magnitude reconhecida por alerta |
 | `tarefas.json` | tarefas e histórico de transições |
-| `webhook-estado.json` | assinaturas entregues e último resultado |
+| `webhook-estado.json` | assinaturas entregues e último resultado por destino externo |
 
 Segredos nunca aparecem em `GET /api/config`: são substituídos por marcadores como `temChave`, `temToken`, `temBearer`, `temHeaderValor`, `temEvolutionApiKey` e `temDiscordUrl`.
 
@@ -74,7 +74,7 @@ Segredos nunca aparecem em `GET /api/config`: são substituídos por marcadores 
 
 ## Canais externos
 
-O dispatcher mantém uma máquina de estados única e adapta cada evento ao modo configurado:
+`config.webhook.destinos[]` contém destinos com ID estável, nome, ativação, modo e credenciais. O dispatcher mantém uma máquina de estados independente por ID e adapta o mesmo evento a cada destino ativo:
 
 | Modo | Contrato de entrega |
 |---|---|
@@ -82,7 +82,7 @@ O dispatcher mantém uma máquina de estados única e adapta cada evento ao modo
 | WhatsApp / Evolution API | `POST /message/sendText/{instanceName}`, header `apikey` e corpo `{ number, textMessage: { text } }` |
 | Discord | execução do webhook com `wait=true`, `content`, nome configurável e menções desativadas |
 
-Todas as requisições usam `Content-Type: application/json` e `User-Agent: n8n-monitor/1.0`. O payload técnico completo abaixo é enviado somente no modo Webhook HTTP; WhatsApp e Discord recebem uma representação textual sem credenciais.
+Todos os destinos ativos são processados em paralelo. Falha, retry, último resultado e deduplicação de um destino não alteram os demais. Todas as requisições usam `Content-Type: application/json` e `User-Agent: n8n-monitor/1.0`. O payload técnico completo abaixo é enviado somente no modo Webhook HTTP; WhatsApp e Discord recebem uma representação textual sem credenciais.
 
 ```json
 {
@@ -108,7 +108,7 @@ Todas as requisições usam `Content-Type: application/json` e `User-Agent: n8n-
 }
 ```
 
-Eventos: `opened`, `worsened`, `resolved` e `test`. Resolução inclui `{ "mode": "automatic" }` ou `manual`. Entrega exige HTTP 2xx, tem timeout de 10s e três tentativas. Falha preserva o estado anterior para nova tentativa.
+Eventos: `opened`, `worsened`, `resolved` e `test`. Resolução inclui `{ "mode": "automatic" }` ou `manual`. Entrega exige HTTP 2xx, tem timeout de 10s e três tentativas. Falha preserva o estado anterior para nova tentativa apenas no destino afetado. Configurações antigas de canal único são migradas para `destino-1`, incluindo o estado antispam persistido.
 
 ## APIs
 
@@ -121,7 +121,7 @@ Eventos: `opened`, `worsened`, `resolved` e `test`. Resolução inclui `{ "mode"
 | `GET /api/cron` | avaliação detalhada dos agendamentos |
 | `GET /api/uptime` | status Kuma, TLS e domínio |
 | `POST /api/uptime/teste` | testa credencial e lista monitores |
-| `POST /api/webhook/teste` | envia evento de teste |
+| `POST /api/webhook/teste` | envia evento de teste para um destino, identificado por `id` |
 | `POST /api/reconhecer` | move para análise ou reconhece resolução |
 | `GET/POST /api/tarefas` | lista e altera tarefas |
 | `GET /api/dashboard` | agregações com filtro `instancias` |

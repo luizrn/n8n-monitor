@@ -25,7 +25,7 @@ Built with plain Node.js, with no npm dependencies, framework, or build step.
 | 🔎 | Logs | Search and filters by status, mode, period, and instance, with redacted diagnostics. |
 | 🔔 | Browser notifications | Reports yellow and red changes while the Monitor is open in the background. |
 | 🔊 | Sound | Plays only for red alerts, with volume, test control, and an anti-spam cooldown. |
-| 🪝 | External channels | Sends opened, worsened, and resolved events through HTTP webhooks, WhatsApp/Evolution API, or Discord. |
+| 🪝 | External channels | Sends opened, worsened, and resolved events simultaneously to multiple HTTP Webhooks, WhatsApp/Evolution API, and Discord destinations. |
 | 🟢 | Uptime Kuma | Displays status, response time, uptime, maintenance, paused state, and selectable monitors. |
 | 🔐 | TLS | Warns about certificates that are close to expiration, expired, or invalid. |
 | 🌐 | Domains | Checks domain expiration through RDAP and ignores TLDs without a reliable source. |
@@ -68,7 +68,7 @@ The Monitor contains four settings tabs:
 - **n8n Instances:** name, URL, API key, activation, and individual connection test.
 - **Notifications:** toast duration from 0 to 600 seconds, browser notifications, sound, and volume.
 - **Uptime Kuma:** URL, API key, optional public-page slug, expiration warning threshold, and monitor selection.
-- **Webhook:** HTTP Webhook, WhatsApp/Evolution API, or Discord mode, with activation and test delivery. HTTP mode supports `POST`, `PUT`, or `PATCH`, Bearer authentication, and one optional custom header.
+- **Webhook:** a list of HTTP Webhook, WhatsApp/Evolution API, and Discord destinations, each with its own name, activation switch, credentials, test action, and latest result. Multiple destinations can run simultaneously. HTTP mode supports `POST`, `PUT`, or `PATCH`, Bearer authentication, and one optional custom header.
 
 Secret fields are always returned empty to the browser. Leaving them empty when saving preserves the current value.
 
@@ -98,7 +98,7 @@ Data is stored in `%LOCALAPPDATA%\n8n-monitor` on Windows, `$HOME/n8n-monitor` o
 
 Each problem has a stable key. Toasts, browser notifications, and sounds are emitted only once while that key remains active, even if its magnitude increases or the page is reloaded. When the problem disappears, the key is released and a future recurrence may notify again. **Under analysis** moves the item to Tasks and removes it from the Monitor; **Resolved** acknowledges the current magnitude.
 
-The webhook dispatcher maintains its own state machine and sends `opened`, `worsened`, and `resolved` events. See [docs/arquitetura.md](docs/arquitetura.md) for the schema.
+Each external destination maintains its own state machine and receives `opened`, `worsened`, and `resolved` events. See [docs/arquitetura.md](docs/arquitetura.md) for the schema.
 
 ## Development
 

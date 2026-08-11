@@ -71,11 +71,26 @@ export function payloadDe(evento, alerta, resolucao = null) {
 }
 
 export function criarDispatcherWebhook({ ler, gravar, obterConfig, fetchFn = fetch } = {}) {
-  let estado = { ativos: {}, ultimo: null }
+  let estado = { destinos: {} }
   let ocupado = false
+  let filaGravacao = Promise.resolve()
 
   async function carregar() {
-    try { estado = { ...estado, ...JSON.parse(await ler()) } } catch { /* primeiro uso */ }
+    try {
+      const salvo = JSON.parse(await ler())
+      if (salvo?.destinos && typeof salvo.destinos === 'object') estado = { destinos: salvo.destinos }
+      else {
+        const primeiro = obterConfig()?.destinos?.[0]?.id
+        if (primeiro) estado.destinos[primeiro] = { ativos: salvo?.ativos || {}, ultimo: salvo?.ultimo || null }
+      }
+    } catch { /* primeiro uso */ }
+  }
+
+  const estadoDo = (id) => (estado.destinos[id] ||= { ativos: {}, ultimo: null })
+  const persistir = () => {
+    const texto = JSON.stringify(estado, null, 2)
+    filaGravacao = filaGravacao.then(() => gravar(texto))
+    return filaGravacao
   }
 
   async function enviar(payload, cfg = obterConfig()) {
@@ -96,79 +111,101 @@ export function criarDispatcherWebhook({ ler, gravar, obterConfig, fetchFn = fet
     throw ultimoErro
   }
 
-  async function registrarUltimo(ok, detalhe) {
-    estado.ultimo = { ok, detalhe: String(detalhe || ''), em: new Date().toISOString() }
-    await gravar(JSON.stringify(estado, null, 2))
+  async function registrarUltimo(destinoId, ok, detalhe) {
+    estadoDo(destinoId).ultimo = { ok, detalhe: String(detalhe || ''), em: new Date().toISOString() }
+    await persistir()
   }
 
   async function testar(cfg) {
+    const destinoId = cfg.id || 'teste'
     const alerta = { chave: 'teste', nivel: 'atencao', origem: 'teste', tipo: 'teste', titulo: 'Teste do n8n-monitor', resumo: 'Webhook configurado corretamente', magnitude: 1 }
     try {
       const r = await enviar(payloadDe('test', alerta), cfg)
-      await registrarUltimo(true, `HTTP ${r.status}`)
+      await registrarUltimo(destinoId, true, `HTTP ${r.status}`)
       return { ok: true }
     } catch (e) {
-      await registrarUltimo(false, e.message || e)
+      await registrarUltimo(destinoId, false, e.message || e)
       return { ok: false, erro: String(e.message || e) }
+    }
+  }
+
+  async function processarDestino(alertas, cfg) {
+    const destino = estadoDo(cfg.id)
+    const atuais = new Map(alertas.map((a) => [a.chave, a]))
+    for (const alerta of alertas) {
+      const anterior = destino.ativos[alerta.chave]
+      const assinatura = assinaturaAlerta(alerta)
+      if (anterior?.assinatura === assinatura) continue
+      const piorou = !anterior
+        || (anterior.alerta?.nivel !== 'ruim' && alerta.nivel === 'ruim')
+        || Number(alerta.magnitude || 1) > Number(anterior.alerta?.magnitude || 1)
+      if (anterior && !piorou) {
+        destino.ativos[alerta.chave] = { ...anterior, assinatura, alerta }
+        await persistir()
+        continue
+      }
+      const evento = anterior ? 'worsened' : 'opened'
+      try {
+        await enviar(payloadDe(evento, alerta), cfg)
+        destino.ativos[alerta.chave] = { assinatura, alerta, em: new Date().toISOString() }
+        await registrarUltimo(cfg.id, true, `${evento}: ${alerta.chave}`)
+      } catch (e) { await registrarUltimo(cfg.id, false, e.message || e) }
+    }
+    for (const [chave, anterior] of Object.entries({ ...destino.ativos })) {
+      if (atuais.has(chave)) continue
+      if (anterior.acknowledged) {
+        delete destino.ativos[chave]
+        await persistir()
+        continue
+      }
+      try {
+        await enviar(payloadDe('resolved', anterior.alerta, { mode: 'automatic' }), cfg)
+        delete destino.ativos[chave]
+        await registrarUltimo(cfg.id, true, `resolved: ${chave}`)
+      } catch (e) { await registrarUltimo(cfg.id, false, e.message || e) }
     }
   }
 
   async function processar(alertas) {
-    const cfg = obterConfig()
-    if (!cfg?.ativo || ocupado) return
+    const configurados = obterConfig()?.destinos || []
+    const porId = new Map(configurados.map((d) => [d.id, d]))
+    let mudou = false
+    for (const [id, salvo] of Object.entries(estado.destinos)) {
+      const cfg = porId.get(id)
+      if (!cfg) { delete estado.destinos[id]; mudou = true }
+      else if (!cfg.ativo && Object.keys(salvo.ativos || {}).length) {
+        salvo.ativos = {}
+        mudou = true
+      }
+    }
+    if (mudou) await persistir()
+    const destinos = configurados.filter((d) => d.ativo)
+    if (!destinos.length || ocupado) return
     ocupado = true
     try {
-      const atuais = new Map(alertas.map((a) => [a.chave, a]))
-      for (const alerta of alertas) {
-        const anterior = estado.ativos[alerta.chave]
-        const assinatura = assinaturaAlerta(alerta)
-        if (anterior?.assinatura === assinatura) continue
-        const piorou = !anterior
-          || (anterior.alerta?.nivel !== 'ruim' && alerta.nivel === 'ruim')
-          || Number(alerta.magnitude || 1) > Number(anterior.alerta?.magnitude || 1)
-        if (anterior && !piorou) {
-          estado.ativos[alerta.chave] = { ...anterior, assinatura, alerta }
-          await gravar(JSON.stringify(estado, null, 2))
-          continue
-        }
-        const evento = anterior ? 'worsened' : 'opened'
-        try {
-          await enviar(payloadDe(evento, alerta), cfg)
-          estado.ativos[alerta.chave] = { assinatura, alerta, em: new Date().toISOString() }
-          await registrarUltimo(true, `${evento}: ${alerta.chave}`)
-        } catch (e) { await registrarUltimo(false, e.message || e) }
-      }
-      for (const [chave, anterior] of Object.entries({ ...estado.ativos })) {
-        if (atuais.has(chave)) continue
-        if (anterior.acknowledged) {
-          delete estado.ativos[chave]
-          await gravar(JSON.stringify(estado, null, 2))
-          continue
-        }
-        try {
-          await enviar(payloadDe('resolved', anterior.alerta, { mode: 'automatic' }), cfg)
-          delete estado.ativos[chave]
-          await registrarUltimo(true, `resolved: ${chave}`)
-        } catch (e) { await registrarUltimo(false, e.message || e) }
-      }
+      await Promise.all(destinos.map((cfg) => processarDestino(alertas, cfg)))
     } finally { ocupado = false }
   }
 
   async function resolver(alerta, mode = 'manual') {
-    const cfg = obterConfig()
-    const anterior = estado.ativos[alerta?.chave]
-    if (!cfg?.ativo || !anterior) return { ok: true, enviado: false }
-    try {
-      await enviar(payloadDe('resolved', anterior.alerta || alerta, { mode }), cfg)
-      estado.ativos[alerta.chave] = { ...anterior, acknowledged: true }
-      await registrarUltimo(true, `resolved:${mode}: ${alerta.chave}`)
-      return { ok: true, enviado: true }
-    } catch (e) {
-      await registrarUltimo(false, e.message || e)
-      return { ok: false, erro: String(e.message || e) }
-    }
+    const destinos = (obterConfig()?.destinos || []).filter((d) => d.ativo && estadoDo(d.id).ativos[alerta?.chave])
+    if (!destinos.length) return { ok: true, enviado: false }
+    const resultados = await Promise.all(destinos.map(async (cfg) => {
+      const anterior = estadoDo(cfg.id).ativos[alerta.chave]
+      try {
+        await enviar(payloadDe('resolved', anterior.alerta || alerta, { mode }), cfg)
+        estadoDo(cfg.id).ativos[alerta.chave] = { ...anterior, acknowledged: true }
+        await registrarUltimo(cfg.id, true, `resolved:${mode}: ${alerta.chave}`)
+        return null
+      } catch (e) {
+        await registrarUltimo(cfg.id, false, e.message || e)
+        return String(e.message || e)
+      }
+    }))
+    const erros = resultados.filter(Boolean)
+    return erros.length ? { ok: false, enviado: resultados.length > erros.length, erro: erros.join('; ') } : { ok: true, enviado: true }
   }
 
-  function status() { return estado.ultimo }
+  function status(destinoId) { return estado.destinos[destinoId]?.ultimo || null }
   return { carregar, processar, testar, resolver, status }
 }

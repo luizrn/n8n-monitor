@@ -21,7 +21,7 @@ Polling não é evento. Toast, navegador e som usam a chave estável do problema
 
 Fechar um toast ou recarregar a página não remove a deduplicação. O som possui ainda cooldown global de oito segundos. Notificação do sistema é silenciosa porque o áudio é controlado separadamente.
 
-O webhook usa estado persistente no servidor e conserva eventos de agravamento por severidade ou magnitude, pois seu consumidor pode precisar atualizar um incidente externo sem gerar ruído visual para o operador.
+Cada destino externo usa estado persistente próprio no servidor e conserva eventos de agravamento por severidade ou magnitude. Isso permite enviar simultaneamente para Webhook, WhatsApp e Discord sem que falha ou deduplicação de um canal interfira nos demais.
 
 ## Em análise move, não esconde
 

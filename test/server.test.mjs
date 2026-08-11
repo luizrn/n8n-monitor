@@ -27,8 +27,32 @@ test('health responde e migra configuracao legada sem expor chave', async (t) =>
   const publicado = JSON.stringify(cfg)
   assert.ok(!publicado.includes('segredo'))
   assert.ok(!publicado.includes('token-secreto'))
-  assert.equal(cfg.webhook.temBearer, true)
-  assert.equal(cfg.webhook.temHeaderValor, true)
-  assert.equal(cfg.webhook.temEvolutionApiKey, true)
-  assert.equal(cfg.webhook.temDiscordUrl, true)
+  assert.equal(cfg.webhook.destinos.length, 1)
+  const destino = cfg.webhook.destinos[0]
+  assert.equal(destino.id, 'destino-1')
+  assert.equal(destino.temBearer, true)
+  assert.equal(destino.temHeaderValor, true)
+  assert.equal(destino.temEvolutionApiKey, true)
+  assert.equal(destino.temDiscordUrl, true)
+})
+
+test('salva varios destinos e preserva segredos omitidos', async (t) => {
+  const s = await subir()
+  t.after(async () => { s.proc.kill('SIGTERM'); await rm(s.dir, { recursive: true, force: true }) })
+  const endpoint = `http://127.0.0.1:${s.porta}/api/config`
+  const destinos = [
+    { id: 'hook', nome: 'Incidentes', ativo: true, modo: 'webhook', url: 'https://hook', bearer: 'bearer-secreto' },
+    { id: 'zap', nome: 'Plantão', ativo: true, modo: 'evolution', evolutionUrl: 'https://evo', evolutionInstancia: 'principal', evolutionApiKey: 'evo-secreta', evolutionNumero: '5565999999999' },
+  ]
+  let r = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ webhook: { destinos } }) })
+  assert.equal(r.ok, true)
+  r = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ webhook: { destinos: destinos.map((d) => ({ ...d, bearer: '', evolutionApiKey: '' })) } }) })
+  assert.equal(r.ok, true)
+
+  const cfg = await (await fetch(endpoint)).json()
+  assert.deepEqual(cfg.webhook.destinos.map((d) => d.id), ['hook', 'zap'])
+  assert.equal(cfg.webhook.destinos[0].temBearer, true)
+  assert.equal(cfg.webhook.destinos[1].temEvolutionApiKey, true)
+  assert.ok(!JSON.stringify(cfg).includes('bearer-secreto'))
+  assert.ok(!JSON.stringify(cfg).includes('evo-secreta'))
 })
