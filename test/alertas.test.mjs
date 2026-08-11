@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { montarAlertas, assinaturaAlerta } from '../alertas.mjs'
+import { montarAlertas, assinaturaAlerta, podeConfirmarRecuperacao } from '../alertas.mjs'
 
 test('normaliza alertas e isola chaves por instancia', () => {
   const estado = {
@@ -42,4 +42,12 @@ test('leva apenas servicos Kuma ativos e offline para o painel de atencao', () =
   assert.equal(alertas[0].nivel, 'ruim')
   assert.equal(alertas[0].tipo, 'serviço offline')
   assert.equal(alertas[0].instancia, 'Uptime Kuma')
+})
+
+test('so confirma recuperacao quando a fonte respondeu', () => {
+  const estado = { instancias: [{ id: 'ok', alcancavel: true }, { id: 'fora', alcancavel: false }] }
+  assert.equal(podeConfirmarRecuperacao({ chave: 'erro:ok:w:n' }, estado, {}), true)
+  assert.equal(podeConfirmarRecuperacao({ chave: 'erro:fora:w:n' }, estado, {}), false)
+  assert.equal(podeConfirmarRecuperacao({ chave: 'kuma:1' }, estado, { ok: false }), false)
+  assert.equal(podeConfirmarRecuperacao({ chave: 'kuma:1' }, estado, { ok: true }), true)
 })

@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Dúvidas e suporte
+  - name: Dúvidas e suporte / Questions and support
     url: https://github.com/luizrn/n8n-monitor/discussions
-    about: Use as Discussões para perguntas de uso e operação.
-  - name: Vulnerabilidade de segurança
+    about: Use Discussions para perguntas de uso e operação / usage and operations questions.
+  - name: Vulnerabilidade de segurança / Security vulnerability
     url: https://github.com/luizrn/n8n-monitor/security/advisories/new
-    about: Relate vulnerabilidades de forma privada.
+    about: Relate vulnerabilidades de forma privada / Report vulnerabilities privately.

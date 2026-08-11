@@ -156,7 +156,7 @@ function tabela(alvo, linhas, colunas, maxV){
 }
 
 const baseDe = id => ultimo.instancias.find(i=>i.id===id)?.baseUrl || ''
-const celFluxo = l => `<td><a href="${esc(baseDe(l.instanciaId))}/workflow/${esc(l.workflowId)}" target="_blank">${esc(l.fluxo)}</a><div class="sub2"><span class="tag">${esc(l.instancia)}</span></div></td>`
+const celFluxo = l => `<td><a href="${esc(baseDe(l.instanciaId))}/workflow/${esc(l.workflowId)}" target="_blank" rel="noopener noreferrer">${esc(l.fluxo)}</a><div class="sub2"><span class="tag">${esc(l.instancia)}</span></div></td>`
 
 function filtrosInst(d){
   $('#fInst').innerHTML=d.instancias.length>1?'<span class="meta">instâncias</span>'+d.instancias.map(i=>`<button class="tag ${instancias.has(i.id)?'on':''}" data-inst="${esc(i.id)}">${esc(i.nome)}</button>`).join(''):''

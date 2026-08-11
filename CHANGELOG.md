@@ -18,3 +18,17 @@ Todas as mudanças relevantes serão registradas aqui. O projeto segue [Keep a C
 - resumo de conexões n8n/Kuma no estado vazio e acesso direto do bloco N8N aos Logs;
 - Docker, Compose e testes automatizados locais;
 - documentação e arquivos comunitários para o projeto open source.
+
+### Alterado
+
+- persistência atômica e privada para todos os arquivos de estado;
+- recuperação automática condicionada à confirmação da fonte;
+- barras de rolagem alinhadas aos temas claro e escuro;
+- Docker Compose endurecido com filesystem somente leitura e privilégios mínimos.
+
+### Segurança
+
+- redação de segredos em URLs, mensagens e stacks de diagnóstico;
+- validação HTTP/HTTPS, bloqueio de headers reservados e proteção contra prototype pollution;
+- APIs de escrita restritas a JSON, com limite de corpo, verificação de origem e erros sem detalhes internos;
+- caminhos locais e URLs secretas de webhook removidos das respostas de configuração.

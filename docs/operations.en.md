@@ -88,6 +88,8 @@ node scripts/diag-exec.mjs ID
 node scripts/dump-wf.mjs WORKFLOW_ID
 ```
 
+On Windows, the scripts use `N8N_API_KEY` from the environment or user registry. On Linux/macOS, export `N8N_API_KEY` and, when needed, `N8N_BASE_URL`. Their output applies the same automatic secret redaction as the dashboard.
+
 | Symptom | Check |
 |---|---|
 | `HTTP 401/403` | API key, expiration, and permissions |
@@ -100,7 +102,14 @@ node scripts/dump-wf.mjs WORKFLOW_ID
 ## Security
 
 - Do not publish the port without external authentication.
+- Write endpoints only accept `Content-Type: application/json`, limit bodies to 1 MB, and reject browser origins that differ from the dashboard host.
+- Configured URLs must use HTTP/HTTPS and cannot include embedded credentials. HTTP destinations cannot override reserved headers.
+- Configuration, tasks, acknowledgements, and deduplication are written atomically with `0600` permissions. The API does not disclose the host path.
+- A task or acknowledgement is cleared only after its source responds and confirms the alert disappeared. n8n or Kuma unavailability is not recovery.
+- HTTP and Discord webhook URLs, tokens, and keys are never returned by `GET /api/config`; an empty secret field preserves its saved value.
 - Do not mount the data directory inside the repository.
 - Immediately revoke any key exposed in logs or an issue.
 - Review diagnostics before sharing, even with automatic redaction.
 - Regularly update Node, the base image, and Uptime Kuma.
+
+`compose.yaml` drops Linux capabilities, blocks privilege escalation, and uses a read-only filesystem except for the `/data` volume and `/tmp` tmpfs.

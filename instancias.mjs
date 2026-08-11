@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 // Um cliente n8n por instancia, cada um com o seu proprio cache.
 //
 // A versao anterior tinha `chamarN8n` lendo uma config global e caches em
@@ -144,7 +146,8 @@ export function criarCliente(inst) {
 const registro = new Map()
 
 function assinatura(inst) {
-  return `${inst.id}|${inst.baseUrl}|${(inst.apiKey || '').slice(-6)}`
+  const segredo = createHash('sha256').update(String(inst.apiKey || '')).digest('hex')
+  return `${inst.id}|${inst.baseUrl}|${segredo}`
 }
 
 export function clienteDe(inst) {

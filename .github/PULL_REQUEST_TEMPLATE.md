@@ -1,16 +1,16 @@
-## Problema
+## Problema / Problem
 
-<!-- O que motivou esta mudança? -->
+<!-- O que motivou esta mudança? / What motivated this change? -->
 
-## Solução
+## Solução / Solution
 
-<!-- Como a mudança resolve o problema? -->
+<!-- Como a mudança resolve o problema? / How does this solve the problem? -->
 
-## Impacto e compatibilidade
+## Impacto e compatibilidade / Impact and compatibility
 
 <!-- Configuração, migração, segurança ou comportamento afetado. -->
 
-## Verificação
+## Verificação / Verification
 
 - [ ] `npm test`
 - [ ] `npm run check`

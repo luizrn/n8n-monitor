@@ -1,8 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { assinaturaAlerta } from './alertas.mjs'
+import { chaveDeRegistroValida, registroSeguro, urlHttpValida } from './seguranca.mjs'
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const METODOS = new Set(['POST', 'PUT', 'PATCH'])
+const HEADERS_RESERVADOS = new Set([
+  'authorization', 'connection', 'content-length', 'content-type', 'cookie', 'host',
+  'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'user-agent',
+])
 
 function textoEvento(payload) {
   const a = payload.alert
@@ -20,7 +25,7 @@ function textoEvento(payload) {
 export function prepararEnvio(payload, cfg = {}) {
   const modo = cfg.modo || 'webhook'
   if (modo === 'discord') {
-    if (!cfg.discordUrl) throw new Error('URL do webhook Discord não configurada')
+    if (!cfg.discordUrl || !urlHttpValida(cfg.discordUrl)) throw new Error('URL do webhook Discord inválida')
     const url = new URL(cfg.discordUrl)
     url.searchParams.set('wait', 'true')
     return {
@@ -30,7 +35,7 @@ export function prepararEnvio(payload, cfg = {}) {
     }
   }
   if (modo === 'evolution') {
-    if (!cfg.evolutionUrl || !cfg.evolutionInstancia || !cfg.evolutionApiKey || !cfg.evolutionNumero) {
+    if (!urlHttpValida(cfg.evolutionUrl) || !cfg.evolutionInstancia || !cfg.evolutionApiKey || !cfg.evolutionNumero) {
       throw new Error('URL, instância, API key e número da Evolution API são obrigatórios')
     }
     return {
@@ -40,12 +45,13 @@ export function prepararEnvio(payload, cfg = {}) {
       body: { number: String(cfg.evolutionNumero).replace(/\D/g, ''), textMessage: { text: textoEvento(payload) } },
     }
   }
-  if (!cfg.url) throw new Error('URL do webhook não configurada')
-  const headers = { 'content-type': 'application/json', 'user-agent': 'n8n-monitor/1.0' }
+  if (!urlHttpValida(cfg.url)) throw new Error('URL do webhook inválida')
+  const headers = Object.assign(Object.create(null), { 'content-type': 'application/json', 'user-agent': 'n8n-monitor/1.0' })
   if (cfg.bearer) headers.authorization = `Bearer ${cfg.bearer}`
   if (cfg.headerNome) {
     if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(cfg.headerNome)) throw new Error('Nome do header opcional inválido')
-    if (cfg.headerNome.toLowerCase() === 'content-type') throw new Error('Content-Type é definido automaticamente')
+    if (HEADERS_RESERVADOS.has(cfg.headerNome.toLowerCase())) throw new Error('Header opcional reservado')
+    if (/[\r\n]/.test(cfg.headerValor || '')) throw new Error('Valor do header opcional inválido')
     headers[cfg.headerNome] = cfg.headerValor || ''
   }
   return { url: cfg.url, method: METODOS.has(cfg.metodo) ? cfg.metodo : 'POST', headers, body: payload }
@@ -71,14 +77,17 @@ export function payloadDe(evento, alerta, resolucao = null) {
 }
 
 export function criarDispatcherWebhook({ ler, gravar, obterConfig, fetchFn = fetch } = {}) {
-  let estado = { destinos: {} }
+  let estado = { destinos: registroSeguro() }
   let ocupado = false
   let filaGravacao = Promise.resolve()
 
   async function carregar() {
     try {
       const salvo = JSON.parse(await ler())
-      if (salvo?.destinos && typeof salvo.destinos === 'object') estado = { destinos: salvo.destinos }
+      if (salvo?.destinos && typeof salvo.destinos === 'object') {
+        estado = { destinos: registroSeguro(salvo.destinos) }
+        for (const destino of Object.values(estado.destinos)) destino.ativos = registroSeguro(destino?.ativos)
+      }
       else {
         const primeiro = obterConfig()?.destinos?.[0]?.id
         if (primeiro) estado.destinos[primeiro] = { ativos: salvo?.ativos || {}, ultimo: salvo?.ultimo || null }
@@ -86,7 +95,10 @@ export function criarDispatcherWebhook({ ler, gravar, obterConfig, fetchFn = fet
     } catch { /* primeiro uso */ }
   }
 
-  const estadoDo = (id) => (estado.destinos[id] ||= { ativos: {}, ultimo: null })
+  const estadoDo = (id) => {
+    if (!chaveDeRegistroValida(id)) throw new Error('ID de destino inválido')
+    return (estado.destinos[id] ||= { ativos: registroSeguro(), ultimo: null })
+  }
   const persistir = () => {
     const texto = JSON.stringify(estado, null, 2)
     filaGravacao = filaGravacao.then(() => gravar(texto))
@@ -129,7 +141,7 @@ export function criarDispatcherWebhook({ ler, gravar, obterConfig, fetchFn = fet
     }
   }
 
-  async function processarDestino(alertas, cfg) {
+  async function processarDestino(alertas, cfg, podeResolver = () => true) {
     const destino = estadoDo(cfg.id)
     const atuais = new Map(alertas.map((a) => [a.chave, a]))
     for (const alerta of alertas) {
@@ -153,6 +165,7 @@ export function criarDispatcherWebhook({ ler, gravar, obterConfig, fetchFn = fet
     }
     for (const [chave, anterior] of Object.entries({ ...destino.ativos })) {
       if (atuais.has(chave)) continue
+      if (!podeResolver(anterior.alerta || { chave })) continue
       if (anterior.acknowledged) {
         delete destino.ativos[chave]
         await persistir()
@@ -166,7 +179,7 @@ export function criarDispatcherWebhook({ ler, gravar, obterConfig, fetchFn = fet
     }
   }
 
-  async function processar(alertas) {
+  async function processar(alertas, podeResolver = () => true) {
     const configurados = obterConfig()?.destinos || []
     const porId = new Map(configurados.map((d) => [d.id, d]))
     let mudou = false
@@ -183,7 +196,7 @@ export function criarDispatcherWebhook({ ler, gravar, obterConfig, fetchFn = fet
     if (!destinos.length || ocupado) return
     ocupado = true
     try {
-      await Promise.all(destinos.map((cfg) => processarDestino(alertas, cfg)))
+      await Promise.all(destinos.map((cfg) => processarDestino(alertas, cfg, podeResolver)))
     } finally { ocupado = false }
   }
 

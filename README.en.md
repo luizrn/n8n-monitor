@@ -31,7 +31,7 @@ Built with plain Node.js, with no npm dependencies, framework, or build step.
 | 🟢 | Uptime Kuma | Displays status, response time, uptime, maintenance, paused state, and selectable monitors. |
 | 🔐 | TLS | Warns about certificates that are close to expiration, expired, or invalid. |
 | 🌐 | Domains | Checks domain expiration through RDAP and ignores TLDs without a reliable source. |
-| 🐳 | Docker | Non-root image, health check, persistent volume, and Compose bound to loopback. |
+| 🐳 | Docker | Non-root image, health check, persistent volume, read-only filesystem, and Compose bound to loopback. |
 | 🧪 | Automated tests | `node:test`, server smoke tests, and local syntax checks. |
 | 🌍 | Bilingual interface | Brazilian Portuguese and English across Monitor, Settings, Tasks, Dashboard, Logs, dialogs, and notifications. |
 
@@ -102,7 +102,7 @@ Data is stored in `%LOCALAPPDATA%\n8n-monitor` on Windows, `$HOME/n8n-monitor` o
 
 ## Alert Semantics
 
-Each problem has a stable key. Toasts, browser notifications, and sounds are emitted only once while that key remains active, even if its magnitude increases or the page is reloaded. When the problem disappears, the key is released and a future recurrence may notify again. **Under analysis** moves the item to Tasks and removes it from the Monitor; **Resolved** acknowledges the current magnitude.
+Each problem has a stable key. Toasts, browser notifications, and sounds are emitted only once while that key remains active, even if its magnitude increases or the page is reloaded. When the source responds and confirms that the problem disappeared, the key is released and a future recurrence may notify again; source unavailability does not produce a false recovery. **Under analysis** moves the item to Tasks and removes it from the Monitor; **Resolved** acknowledges the current magnitude.
 
 Each external destination maintains its own state machine and receives `opened`, `worsened`, and `resolved` events. See [docs/architecture.en.md](docs/architecture.en.md) for the schema.
 

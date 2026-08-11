@@ -31,7 +31,7 @@ Node.js puro, sem dependências npm, framework ou etapa de build.
 | 🟢 | Uptime Kuma | Exibe status, resposta, uptime, manutenção, pausa e monitores selecionáveis. |
 | 🔐 | TLS | Avisa certificado próximo do vencimento, expirado ou inválido. |
 | 🌐 | Domínios | Consulta expiração por RDAP e ignora TLDs sem fonte confiável. |
-| 🐳 | Docker | Imagem não-root, health check, volume persistente e Compose preso ao loopback. |
+| 🐳 | Docker | Imagem não-root, health check, volume persistente, filesystem somente leitura e Compose preso ao loopback. |
 | 🧪 | Testes automatizados | `node:test`, smoke test do servidor e verificações de sintaxe executadas localmente. |
 | 🌍 | Interface bilíngue | Português (Brasil) e inglês em Monitor, Configurações, Tarefas, Dashboard, Logs, modais e notificações. |
 
@@ -102,7 +102,7 @@ Dados ficam em `%LOCALAPPDATA%\n8n-monitor` no Windows, `$HOME/n8n-monitor` em o
 
 ## Semântica dos alertas
 
-Cada problema possui uma chave estável. Toast, notificação do navegador e som são emitidos uma única vez enquanto essa chave estiver ativa, mesmo que a magnitude aumente ou a página seja recarregada. Quando o problema desaparece, a chave é liberada e uma recorrência futura pode avisar novamente. **Em análise** move o item para Tarefas e o remove do Monitor; **Resolvido** reconhece a magnitude atual.
+Cada problema possui uma chave estável. Toast, notificação do navegador e som são emitidos uma única vez enquanto essa chave estiver ativa, mesmo que a magnitude aumente ou a página seja recarregada. Quando a fonte responde e confirma que o problema desapareceu, a chave é liberada e uma recorrência futura pode avisar novamente; indisponibilidade da fonte não produz recuperação falsa. **Em análise** move o item para Tarefas e o remove do Monitor; **Resolvido** reconhece a magnitude atual.
 
 Cada destino externo mantém uma máquina de estados própria e recebe `opened`, `worsened` e `resolved`. Consulte [docs/arquitetura.md](docs/arquitetura.md) para o schema.
 

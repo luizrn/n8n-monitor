@@ -1,19 +1,19 @@
 ---
-name: Sugerir recurso
-about: Proponha uma capacidade ou melhoria
+name: Recurso / Feature
+about: Propose a capability or improvement / Proponha uma capacidade ou melhoria
 title: "[Recurso] "
 labels: enhancement
 assignees: ''
 ---
 
-## Problema
+## Problema / Problem
 
-Que necessidade operacional esta proposta resolve?
+Que necessidade operacional esta proposta resolve? What operational need does this solve?
 
-## Comportamento desejado
+## Comportamento desejado / Desired behavior
 
-## Alternativas consideradas
+## Alternativas consideradas / Alternatives considered
 
-## Impacto
+## Impacto / Impact
 
-Informe efeitos esperados em compatibilidade, configuração, segurança e operação.
+Informe efeitos esperados em compatibilidade, configuração, segurança e operação. Describe expected effects on compatibility, configuration, security, and operations.

@@ -201,7 +201,7 @@ window.Toaster = (() => {
        </div>
        <div class="tit">${esc(a.titulo || '')}</div>
        ${a.det ? `<div class="det">${a.det}</div>` : ''}
-       ${a.link ? `<div class="det"><a href="${esc(a.link)}" target="_blank">${tr('abrir no n8n →')}</a></div>` : ''}`
+       ${a.link ? `<div class="det"><a href="${esc(a.link)}" target="_blank" rel="noopener noreferrer">${tr('abrir no n8n →')}</a></div>` : ''}`
 
     el.querySelector('.x').addEventListener('click', () => fechar(a.chave))
 

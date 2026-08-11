@@ -11,6 +11,8 @@
 // existente em vez de criar duplicata — e o contador de ocorrencias sobe na
 // tarefa que alguem ja esta tratando.
 
+import { chaveDeRegistroValida, registroSeguro, urlHttpValida } from './seguranca.mjs'
+
 export const ESTADOS = ['analise', 'aguardando', 'corrigindo', 'corrigido', 'producao', 'resolvido']
 
 export const ROTULOS = {
@@ -32,14 +34,17 @@ export function normalizarEstado(v) {
 }
 
 export function criarRepo({ ler, gravar }) {
-  let tarefas = {}
+  let tarefas = registroSeguro()
 
   async function carregar() {
     try {
       const cru = JSON.parse(await ler())
-      tarefas = cru && typeof cru === 'object' ? cru : {}
+      tarefas = registroSeguro(cru)
+      for (const tarefa of Object.values(tarefas)) {
+        if (tarefa?.link && !urlHttpValida(tarefa.link)) tarefa.link = null
+      }
     } catch {
-      tarefas = {}
+      tarefas = registroSeguro()
     }
   }
 
@@ -54,14 +59,15 @@ export function criarRepo({ ler, gravar }) {
   async function abrir(dados) {
     const agora = new Date().toISOString()
     const chave = String(dados.chave || '').trim()
-    if (!chave) throw new Error('falta chave')
+    if (!chaveDeRegistroValida(chave)) throw new Error('chave inválida')
+    if (dados.link && !urlHttpValida(dados.link)) dados = { ...dados, link: null }
 
     const antiga = tarefas[chave]
     if (antiga) {
       antiga.magnitude = Math.max(Number(antiga.magnitude || 1), Number(dados.magnitude || 1))
       antiga.ocorrencias = (antiga.ocorrencias || 1) + 1
       antiga.vistoEm = agora
-      for (const c of ['fluxo', 'no', 'mensagem', 'link', 'tipo', 'nivel', 'instancia', 'instanciaId', 'workflowId']) {
+      for (const c of ['fluxo', 'no', 'mensagem', 'link', 'tipo', 'nivel', 'origem', 'instancia', 'instanciaId', 'workflowId']) {
         if (dados[c] != null && dados[c] !== '') antiga[c] = dados[c]
       }
       if (antiga.estado === 'resolvido') {
@@ -81,6 +87,7 @@ export function criarRepo({ ler, gravar }) {
       instanciaId: dados.instanciaId || null,
       instancia: dados.instancia || null,
       tipo: dados.tipo || 'alerta',
+      origem: dados.origem || null,
       nivel: dados.nivel || 'atencao',
       fluxo: dados.fluxo || dados.titulo || null,
       workflowId: dados.workflowId || null,
@@ -146,12 +153,12 @@ export function criarRepo({ ler, gravar }) {
 
   function pegar(chave) { return tarefas[chave] || null }
 
-  async function resolverAusentes(chavesPresentes) {
+  async function resolverAusentes(chavesPresentes, podeResolver = () => true) {
     const presentes = new Set(chavesPresentes || [])
     const agora = new Date().toISOString()
     let mudou = false
     for (const t of Object.values(tarefas)) {
-      if (t.estado === 'resolvido' || presentes.has(t.chave)) continue
+      if (t.estado === 'resolvido' || presentes.has(t.chave) || !podeResolver(t)) continue
       t.historico = [...(t.historico || []), {
         de: t.estado, para: 'resolvido', em: agora, motivo: 'recuperacao-automatica',
       }].slice(-40)
