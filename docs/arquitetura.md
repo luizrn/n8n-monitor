@@ -1,151 +1,127 @@
 # Arquitetura
 
+## Visão geral
+
+O projeto é um servidor HTTP em Node.js e quatro páginas HTML sem build. O processo mantém clientes e caches separados por instância n8n, coleta os dados em segundo plano e entrega um estado normalizado às telas.
+
+```text
+n8n APIs ─┐
+           ├─ coletores ─ alertas normalizados ─┬─ Monitor / Tarefas
+Kuma ──────┤                                   ├─ navegador e som
+IANA/RDAP ─┘                                   └─ webhook
 ```
-navegador (127.0.0.1:8787)
-   │  polling 10s  ─────────►  GET  /api/state       agregado do painel
-   │  polling 5min ─────────►  GET  /api/cron        configurado × executou
-   │  sob demanda  ─────────►  GET  /api/execucao    diagnóstico redigido
-   │                          GET/POST /api/config   sem nunca devolver a chave
-   ▼
-server.mjs  ── X-N8N-API-KEY ──►  API REST do n8n  /api/v1/{workflows,executions}
-   │
-   └── %LOCALAPPDATA%\n8n-monitor\config.json   (chave, modo 0600)
-```
 
-O navegador **nunca** fala com o n8n. Toda chamada passa pelo servidor local, que é o único lugar onde a chave existe. Isso não é preciosismo: é o que permite abrir o painel sem embutir credencial em página, e o que torna a redação de segredos possível num ponto só.
+Intervalos:
 
-## Arquivos
+| Fonte | Intervalo | Cache |
+|---|---:|---|
+| Estado n8n | 10s | snapshot completo por 8s |
+| Uptime Kuma | 20s | resposta e seleção de monitores |
+| Agendamentos | 5min | por instância |
+| RDAP | 24h | por hostname |
 
-| | |
+O coletor impede execuções concorrentes. A interface lê o mesmo snapshot e não multiplica chamadas remotas quando há várias abas abertas.
+
+## Módulos
+
+| Arquivo | Responsabilidade |
 |---|---|
-| `server.mjs` | HTTP, config, agregação, redação de segredos, conferência de agendamentos |
-| `cron.mjs` | avaliador de cron e comparação previsto × executado |
-| `public/base.css` | tokens e componentes compartilhados pelas três páginas |
-| `public/index.html` | Monitor — o painel de alerta |
-| `public/dashboard.html` | Dashboard — volume, erros e duração ao longo do tempo |
-| `public/logs.html` | Logs — busca de execuções |
-| `scripts/watch-n8n.ps1` | monitor de linha única para consumo por agente ou log |
-| `scripts/diag-exec.mjs` | peso e tempo por nó de uma execução |
-| `scripts/dump-wf.mjs` | nós, conexões e código de um workflow |
+| `server.mjs` | configuração, HTTP, coleta, caches e diagnóstico |
+| `instancias.mjs` | cliente n8n e caches isolados por instância |
+| `cron.mjs` | interpretação e comparação de agendamentos |
+| `alertas.mjs` | contrato e severidade dos alertas |
+| `uptime.mjs` | parser Prometheus e status Kuma |
+| `rdap.mjs` | descoberta do serviço IANA e expiração de domínio |
+| `tarefas.mjs` | estados, notas, histórico e recuperação |
+| `webhook.mjs` | deduplicação, payload, retry e entrega |
+| `public/toasts.js` | toast, Notification API e Web Audio |
 
-## Endpoints
+## Persistência
 
-### `GET /api/state`
+O diretório é `N8N_MONITOR_DATA_DIR`, `%LOCALAPPDATA%\n8n-monitor` ou `$HOME/n8n-monitor`.
 
-O agregado que alimenta a tela. Chama três consultas em paralelo (todas, erros, em execução), paginando pelo `nextCursor` até cobrir a janela de uma hora.
+| Arquivo | Conteúdo |
+|---|---|
+| `config.json` | instâncias e credenciais, notificações, Kuma e webhook |
+| `reconhecimentos.json` | magnitude reconhecida por alerta |
+| `tarefas.json` | tarefas e histórico de transições |
+| `webhook-estado.json` | assinaturas entregues e último resultado |
 
-```jsonc
+Segredos nunca aparecem em `GET /api/config`: são substituídos por `temChave`, `temToken` e `temBearer`.
+
+## Contrato de alerta
+
+```json
 {
-  "ok": true,
-  "momento": "2026-08-10T14:34:09.000Z",
-  "baseUrl": "https://…",
-  "tiles": {
-    "errosHora": 0,
-    "execucoesHora": 187,
-    "rodando": 3,
-    "travadas": 1,
-    "porMinuto": 3.1,
-    "truncado": true      // bateu no teto de leitura: o número real é maior
+  "chave": "erro:producao:workflow:no",
+  "origem": "n8n",
+  "nivel": "ruim",
+  "tipo": "erro de execução",
+  "titulo": "Sincroniza clientes",
+  "resumo": "Sincroniza clientes: 3x erro",
+  "detalhe": "nó HTTP Request · 3 ocorrências",
+  "mensagem": "HTTP 429",
+  "magnitude": 3,
+  "instanciaId": "producao",
+  "instancia": "Produção",
+  "workflowId": "abc",
+  "executionId": "123",
+  "link": "https://n8n.example/workflow/abc/executions/123"
+}
+```
+
+`nivel` usa `ruim` ou `atencao`. A assinatura anti-spam combina nível e magnitude.
+
+## Webhook
+
+Requisição `POST`, `Content-Type: application/json`, `User-Agent: n8n-monitor/1.0` e `Authorization: Bearer ...` quando configurado.
+
+```json
+{
+  "version": 1,
+  "eventId": "uuid",
+  "event": "opened",
+  "occurredAt": "2026-08-11T12:00:00.000Z",
+  "source": "n8n-monitor",
+  "alert": {
+    "key": "erro:producao:workflow:no",
+    "severity": "red",
+    "category": "n8n",
+    "type": "erro de execução",
+    "title": "Sincroniza clientes",
+    "summary": "Sincroniza clientes: 3x erro",
+    "detail": "nó HTTP Request",
+    "message": "HTTP 429",
+    "magnitude": 3,
+    "instance": { "id": "producao", "name": "Produção" },
+    "url": "https://n8n.example/workflow/abc/executions/123"
   },
-  "serie": [ { "minuto": "…", "ok": 4, "erro": 0 } ],   // 60 baldes
-  "erros": [ /* grupos, ver abaixo */ ],
-  "rodando": [ { "id", "fluxo", "workflowId", "inicio", "minutos" } ],
-  "porFluxo": [ { "fluxo", "total", "erros" } ],
-  "limiteTravadaMin": 30
+  "resolution": null
 }
 ```
 
-Quando não há erro na janela de uma hora, `erros` recai nos últimos erros retidos, mesmo fora dela — é melhor mostrar o último erro conhecido do que uma tela vazia. Por isso a linha de saúde conta a partir dos grupos, não da janela: contar coisas diferentes nos dois lugares fazia o painel se contradizer.
+Eventos: `opened`, `worsened`, `resolved` e `test`. Resolução inclui `{ "mode": "automatic" }` ou `manual`. Entrega exige HTTP 2xx, tem timeout de 10s e três tentativas. Falha preserva o estado anterior para nova tentativa.
 
-### Agrupamento de erros
+## APIs
 
-```jsonc
-{
-  "workflowId": "abc", "fluxo": "Sincroniza CX",
-  "no": "HTTP Request",                  // nó que falhou
-  "mensagem": "The service is receiving too many requests from you",
-  "total": 200,                          // ocorrências
-  "ids": ["981204", "981203", "…"],      // até 50
-  "idExemplo": "981204",                 // de quem o detalhe foi buscado
-  "primeiro": "…", "ultimo": "…",
-  "detalheOmitido": false
-}
-```
-
-O detalhe (nó e mensagem) é buscado **só para o exemplar mais recente de cada grupo**, no máximo 10 grupos. Buscar por execução seria uma chamada por ocorrência: 200 erros iguais viravam 200 requisições para descobrir a mesma coisa.
-
-### `GET /api/logs`
-
-Filtra sobre um **cache curto** (30s) da lista recente, em memória. Sem ele, cada tecla digitada na busca dispararia paginação remota.
-
-Parâmetros: `q` (nome do fluxo ou id), `status`, `modo` (listas separadas por vírgula), `horas`, `pagina`, `limite`.
-
-As facetas `porStatus` e `porModo` são calculadas sobre o conjunto **já filtrado** por busca e período — assim o contador do botão bate com o que o clique produz, em vez de prometer resultados que o filtro atual não entrega.
-
-### `GET /api/dashboard?horas=N`
-
-Agrega sobre o mesmo cache. O passo do gráfico se adapta à janela: 1 min até 2h, 10 min até 12h, 1 hora acima disso.
-
-`coberturaHoras` informa **quanto do período pedido a retenção realmente cobre**. A página usa esse número para avisar quando os dados não alcançam o que foi pedido.
-
-A profundidade de leitura acompanha a janela — 10 páginas até 2h, 30 até 12h, 60 acima — porque numa instância com alto volume 10 páginas (2.500 execuções) podem cobrir menos de duas horas. O cache guarda com quantas páginas foi montado e relê quando alguém pede mais fundo.
-
-### `GET /api/cron`
-
-Resultado em cache por 2 minutos; `?recarregar=1` força. Ver [decisoes.md](decisoes.md) para a semântica dos vereditos.
-
-```jsonc
-{
-  "ok": true, "janelaHoras": 24, "toleranciaMin": 5, "fusoPadrao": "America/Cuiaba",
-  "linhas": [{
-    "fluxo": "…", "workflowId": "…", "no": "Schedule Trigger",
-    "regra": "a cada 20 min", "fuso": "America/Cuiaba",
-    "ativo": true, "desativado": false,
-    "veredito": "ok",              // ok | com-falhas | nunca-executou | sem-dados
-                                   // | nao-comparavel | sem-janela | inativo
-    "janelaVerificadaHoras": 1.8,  // quanto deu para conferir de fato
-    "esperado": 6, "cumpridas": 6, "perdidas": [], "totalPerdidas": 0,
-    "extras": 0, "atrasoMedioSeg": 23,
-    "ultimoPrevisto": "…", "ultimaExec": "…"
-  }]
-}
-```
-
-### `GET /api/execucao?id=<n>`
-
-Devolve `{ ok, fluxo, diagnostico }`. O `diagnostico` é markdown pronto para colar: fluxo, execução, nó que falhou, mensagem, `httpCode`, parâmetros do nó, contexto da requisição, nós executados e stack — **com credenciais redigidas**.
-
-### `GET|POST /api/config`
-
-`GET` responde `{ baseUrl, temChave, ativo, caminhoConfig }`. Nunca a chave.
-
-`POST` aceita `{ baseUrl?, apiKey?, ativo? }`. **`apiKey` vazio mantém a atual** — é o que permite salvar a URL sem redigitar a chave.
-
-### `POST /api/teste`
-
-Faz uma chamada real ao n8n e responde `{ ok }` ou `{ ok: false, erro }`.
-
-## Avaliador de cron
-
-`cron.mjs` não usa biblioteca. Em vez de calcular a próxima ocorrência, varre a janela **minuto a minuto** e testa cada minuto contra a expressão:
-
-```js
-for (let t = inicio; t <= fim; t += 60000)
-  if (casaCron(campos, partesNoFuso(new Date(t), tz))) ocorrencias.push(new Date(t))
-```
-
-1440 iterações por dia é barato, e a conversão de fuso pelo `Intl.DateTimeFormat` resolve horário de verão sem aritmética de offset — que é onde implementações caseiras normalmente erram.
-
-As opções do Schedule Trigger são traduzidas para cron, para haver um avaliador só:
-
-| opção do nó | cron equivalente |
+| Método e rota | Função |
 |---|---|
-| `minutes`, intervalo N | `*/N * * * *` |
-| `hours`, intervalo N, minuto M | `M */N * * *` |
-| `days`, hora H, minuto M | `M H * * *` |
-| `weeks`, dias D…, H:M | `M H * * D,…` |
-| `months`, dia D, H:M | `M H D * *` |
-| `cronExpression` | como está (6 campos → descarta os segundos) |
-| `seconds` | não comparável (granularidade fina demais) |
+| `GET /api/health` | vida do processo, sem segredos |
+| `GET/POST /api/config` | configuração pública e atualização parcial |
+| `POST /api/teste` | testa instância com valores ainda não salvos |
+| `GET /api/state` | snapshot completo e alertas visíveis |
+| `GET /api/cron` | avaliação detalhada dos agendamentos |
+| `GET /api/uptime` | status Kuma, TLS e domínio |
+| `POST /api/uptime/teste` | testa credencial e lista monitores |
+| `POST /api/webhook/teste` | envia evento de teste |
+| `POST /api/reconhecer` | move para análise ou reconhece resolução |
+| `GET/POST /api/tarefas` | lista e altera tarefas |
+| `GET /api/dashboard` | agregações com filtro `instancias` |
+| `GET /api/logs` | execuções filtradas e paginadas |
+| `GET /api/execucao` | diagnóstico redigido por instância |
 
-Item de `rule.interval` sem `field` usa `days`, que é o padrão do nó — detalhe que, quando ignorado, classificava a maioria dos agendamentos como "não comparável".
+## Compatibilidade
+
+A configuração legada `baseUrl`/`apiKey` é convertida em uma instância chamada `Principal`. IDs n8n são locais à instância e nunca são usados sem `instanciaId`.
+
+O Kuma não oferece uma API REST autenticada estável para listar monitores. `/metrics` é a fonte principal; `monitor_uptime_ratio` é opcional e o slug público serve como fallback de uptime 24h.

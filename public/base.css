@@ -27,14 +27,17 @@ body{margin:0;background:var(--sup);color:var(--ink);
 a{color:var(--calmo);text-decoration:none}
 a:hover{text-decoration:underline}
 
-button,select,input{font:inherit}
+button,select,input,textarea{font:inherit}
 button{font-size:12.5px;color:var(--ink2);background:transparent;
   border:1px solid var(--linha);border-radius:7px;padding:5px 10px;cursor:pointer;flex:none}
 button:hover{color:var(--ink);border-color:var(--ink3)}
 button.on{color:var(--ink);border-color:var(--ink3);background:var(--cartao)}
-input,select{font-size:13px;color:var(--ink);background:var(--cartao);
+input,select,textarea{font-size:13px;color:var(--ink);background:var(--cartao);
   border:1px solid var(--linha);border-radius:8px;padding:6px 10px}
-input:focus,select:focus{outline:none;border-color:var(--calmo)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--calmo)}
+label{display:block;font-size:12px;color:var(--ink2);margin:12px 0 5px}
+.linha-btn{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.dlg>input,.dlg>textarea{width:100%}
 
 .meta{color:var(--ink3);font-size:11.5px;font-variant-numeric:tabular-nums;flex:none}
 .cresce{flex:1}
@@ -49,7 +52,7 @@ input:focus,select:focus{outline:none;border-color:var(--calmo)}
   box-shadow:0 1px 2px rgba(0,0,0,.06)}
 
 /* ---------- painéis ---------- */
-.painel{background:var(--cartao);border:1px solid var(--linha);border-radius:12px;
+.painel{background:var(--cartao);border:1px solid var(--linha);border-radius:8px;
   display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .painel>.cab{display:flex;align-items:center;gap:9px;padding:11px 15px 9px;
   font-size:10.5px;font-weight:660;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
@@ -59,7 +62,7 @@ input:focus,select:focus{outline:none;border-color:var(--calmo)}
 /* ---------- status ---------- */
 #status{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;
   letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);flex:none}
-#status .ponto{width:8px;height:8px;border-radius:50%;flex:none;position:relative;
+#status .ponto{width:16px;height:16px;border-radius:50%;flex:none;position:relative;
   background:currentColor;color:var(--ink3)}
 #status .ponto::after{content:'';position:absolute;inset:0;border-radius:50%;
   background:currentColor;animation:anel 2s cubic-bezier(.2,.6,.3,1) infinite}
@@ -95,6 +98,7 @@ tr.clic:hover td{background:var(--sup)}
 .tag.ruim{color:var(--ruim);border-color:color-mix(in oklab,var(--ruim) 40%,transparent)}
 .tag.atencao{color:var(--atencao);border-color:color-mix(in oklab,var(--atencao) 40%,transparent)}
 .tag.bom{color:var(--bom);border-color:color-mix(in oklab,var(--bom) 40%,transparent)}
+.tag.on{background:var(--cartao);color:var(--calmo);border-color:var(--calmo)}
 
 /* barra proporcional dentro de célula de tabela */
 .barra{height:5px;border-radius:3px;background:var(--calmo);min-width:2px}
@@ -130,6 +134,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 
 .toast .lin1{display:flex;align-items:center;gap:8px}
 .toast .tipo{font-size:9.5px;font-weight:680;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.toast .marca{font-size:10px;padding:1px 5px;border:1px solid var(--linha);border-radius:10px;color:var(--ink2)}
 .toast.ruim .tipo{color:var(--ruim)} .toast.atencao .tipo{color:var(--atencao)}
 .toast .vezes{font-size:11px;font-weight:680;font-variant-numeric:tabular-nums;
   padding:1px 6px;border-radius:20px;border:1px solid var(--linha);color:var(--ink2)}

@@ -3,15 +3,22 @@
   "version": "1.0.0",
   "private": true,
   "description": "Painel de alerta para instâncias n8n: erros agrupados, execuções travadas e conferência de agendamentos (configurado × executou)",
+  "author": "Luiz Fernando Riva Nekel",
   "type": "module",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
     "start": "node server.mjs",
+    "test": "node --test",
+    "check": "node --check server.mjs && node --check cron.mjs && node --check instancias.mjs && node --check tarefas.mjs && node --check uptime.mjs && node --check alertas.mjs && node --check rdap.mjs && node --check webhook.mjs && node --check public/toasts.js",
     "diag": "node scripts/diag-exec.mjs",
     "dump": "node scripts/dump-wf.mjs"
   },
   "dependencies": {},
-  "license": "UNLICENSED"
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/luizrn/n8n-monitor.git" },
+  "bugs": { "url": "https://github.com/luizrn/n8n-monitor/issues" },
+  "homepage": "https://github.com/luizrn/n8n-monitor#readme",
+  "keywords": ["n8n", "monitoring", "observability", "uptime-kuma", "docker"]
 }

@@ -1,64 +1,92 @@
 # Operação
 
-Ajustes de instância que afetam diretamente o que o painel consegue mostrar.
+## Inicialização
 
-## Retenção: o que limita a conferência de agendamentos
-
-O painel só julga um agendamento no intervalo em que existe execução retida. Logo, **a retenção define até onde ele enxerga**.
-
-| variável | default | efeito |
-|---|---|---|
-| `EXECUTIONS_DATA_PRUNE` | `true` | liga a poda contínua |
-| `EXECUTIONS_DATA_MAX_AGE` | `336` (14 dias) | idade máxima, em horas |
-| `EXECUTIONS_DATA_PRUNE_MAX_COUNT` | `10000` | máximo de execuções no banco; `0` = sem limite |
-| `EXECUTIONS_DATA_HARD_DELETE_BUFFER` | `1` | horas até o hard delete |
-
-Como dimensionar: divida o teto de contagem pelo seu volume por hora. A 250 execuções/hora, 15.000 dão ~60 horas de histórico — suficiente para conferir jobs de hora em hora e diários, insuficiente para semanais.
-
-**Não suba o teto às cegas.** O que estoura o banco é o tamanho da execução, não a quantidade. Uma execução com laço longo e muito dado pode passar de 60 MB sozinha; guardar 10.000 dessas é centenas de gigabytes. A ordem certa é: primeiro achar e corrigir os fluxos que produzem execuções gigantes (veja abaixo), depois subir a retenção.
-
-Em fluxos de alto volume e baixo valor diagnóstico, `saveDataSuccessExecution: none` por workflow mantém os erros e descarta os sucessos.
-
-## Execuções gigantes e execuções que nunca terminam
-
-Uma execução parada em `running` por horas, sem erro, geralmente não travou — está rastejando. Duas causas, que se somam:
-
-**`$('outroNo').item` dentro de laço.** Resolve o item pareado caminhando o grafo de execução para trás, então o custo cresce junto com o run data acumulado. Num caso real chegou a **4,5 segundos por item** — 22 minutos de CPU num único nó Code. Resolver `$('outroNo').all()` uma vez, fora do laço, elimina o custo.
-
-**`saveExecutionProgress: true`.** Grava o estado inteiro da execução no banco depois de **cada nó**. Com um blob grande e um laço longo, é amplificação de escrita quadrática.
-
-Para achar o culpado sem afogar o terminal:
+Direta:
 
 ```bash
-node scripts/diag-exec.mjs <id-da-execucao>
+npm start
 ```
 
-Ele soma bytes e tempo por nó. O nó com tempo desproporcional ao número de itens é o problema.
+Docker:
 
-> Cuidado ao aumentar o lote de um `splitInBatches` como "otimização". Se o corpo do laço casa dados por item do loop, ou usa um `Wait` como controle de vazão, mudar o lote altera comportamento — não só desempenho.
+```bash
+docker compose up -d --build
+docker compose ps
+curl http://127.0.0.1:8787/api/health
+```
 
-## Concorrência e banco
+O health check confirma o processo, não testa todas as integrações. O status detalhado aparece no Monitor.
 
-| variável | default | observação |
-|---|---|---|
-| `N8N_CONCURRENCY_PRODUCTION_LIMIT` | desabilitado (`-1`) | limita execuções de produção **em paralelo** |
-| `--concurrency` no worker | `10` | jobs simultâneos por worker, em modo fila |
-| `DB_POSTGRESDB_POOL_SIZE` | `2` | conexões Postgres em paralelo |
+## Configurando o n8n
 
-Duas coisas que costumam ser mal entendidas:
+Crie uma API key em **Settings > n8n API**. Para cada instância, informe nome, URL sem `/api/v1` e chave. O teste consulta um workflow e não salva antes de responder.
 
-**O limite de concorrência não impede o enfileiramento.** A documentação é explícita: as execuções acima do limite ficam na fila e são processadas em FIFO. Contra um fluxo em loop, que gera mais eventos do que consome, ele reduz a velocidade do dano mas não o impede — e um backlog que sobrevive mais tempo que a retenção produz jobs órfãos (`Worker failed to find data for execution N`). Contra loop, o que resolve é corrigir o loop.
+Desativar uma instância interrompe a coleta sem apagar sua configuração. Remover a instância mantém tarefas históricas com o nome gravado.
 
-**O pool do Postgres tem default 2.** Vinte execuções concorrentes contra duas conexões produz `Driver not Connected` e `Connection terminated` em fluxos que não têm defeito nenhum. Deixe o pool pelo menos do tamanho da concorrência de cada worker, e confira que o `max_connections` do Postgres cobre `workers × pool + main + webhooks`.
+Retenção curta limita Dashboard e auditoria de cron. Ajuste a retenção do n8n conforme o período que deseja observar; o monitor informa a cobertura real.
 
-## Erros que não são do fluxo
+## Uptime Kuma
 
-Ao investigar um alerta, descarte primeiro estas causas de infraestrutura:
+Crie uma API key com acesso a `/metrics`, informe a URL base e use **Testar e listar monitores**. Todos chegam selecionados por padrão. O slug de página pública é opcional e só serve como fallback de uptime 24h.
 
-- **`Worker failed to find data for execution N (job M)`** — job órfão no Redis: a execução foi podada mas o job continuou na fila. Não executa nada e não toca em API externa; é ruído até drenar. Os IDs nesses alertas são bem mais antigos que os atuais, e é assim que se reconhece.
-- **429 em vários fluxos ao mesmo tempo** — quase sempre um único fluxo consumindo a cota de um token compartilhado. Olhe o volume por fluxo antes de mexer nos que estão apenas apanhando.
-- **`This execution failed to be processed too many times`** — o n8n desistiu de reprocessar. Costuma acompanhar execução gigante ou reinício da instância.
+Estados:
 
-## Variáveis de ambiente exigem reinício
+- DOWN: vermelho;
+- PENDING/desconhecido: amarelo;
+- MAINTENANCE e pausado: informativos;
+- TLS/domínio dentro do limite: amarelo;
+- TLS/domínio expirado ou inválido: vermelho.
 
-Nenhuma das variáveis acima vale sem reiniciar o n8n. O reinício também mata execuções em andamento, que passam a `crashed` — o que é desejável quando a execução estava presa, e vale antecipar quando não estava.
+Falha RDAP não derruba Kuma. TLD sem serviço oficial ou sem data publicada aparece sem prazo.
+
+## Notificações
+
+A permissão do navegador é pedida ao ativar a opção. Se ela foi negada permanentemente, libere o site nas configurações do navegador. A Notification API exige contexto seguro, mas `localhost` é aceito pelos navegadores modernos.
+
+Áudio precisa de gesto do usuário; use **Testar** depois de abrir Configurações. O som toca somente para vermelho e respeita cooldown.
+
+## Webhook
+
+O destino deve aceitar `POST` JSON e responder 2xx em até 10 segundos. Bearer é opcional. Use o teste antes de ativar.
+
+Em falha, confira **Configurações > Webhook**, logs do processo, DNS, certificado do destino e regras de proxy/firewall. O estado persistido impede reenvio de eventos já aceitos.
+
+## Backup
+
+Faça backup do diretório de dados ou do volume Docker:
+
+```bash
+docker run --rm -v n8n-monitor_n8n-monitor-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/n8n-monitor-backup.tgz -C /data .
+```
+
+O backup contém segredos. Armazene-o criptografado e com acesso restrito.
+
+## Diagnóstico
+
+```bash
+npm run check
+npm test
+node scripts/diag-exec.mjs ID
+node scripts/dump-wf.mjs WORKFLOW_ID
+```
+
+Erros frequentes:
+
+| Sintoma | Verificação |
+|---|---|
+| `HTTP 401/403` | chave, expiração e permissão da API |
+| `HTTP 404` | URL base sem caminho extra |
+| timeout | DNS, proxy, firewall e alcance a partir do host/container |
+| números menores | retenção e limite de paginação indicado na tela |
+| webhook repetido | permissões de escrita no diretório de dados |
+| Kuma sem uptime | métrica indisponível e slug público ausente |
+
+## Segurança
+
+- Não publique a porta sem autenticação externa.
+- Não monte o diretório de dados dentro do repositório.
+- Revogue imediatamente qualquer chave que apareça em logs ou issue.
+- Revise diagnósticos antes de compartilhar, mesmo com redação automática.
+- Atualize regularmente Node, a imagem base e o Uptime Kuma.

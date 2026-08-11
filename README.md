@@ -1,152 +1,120 @@
 # n8n-monitor
 
-<img width="1621" height="760" alt="image" src="https://github.com/user-attachments/assets/c7f639e0-6f10-44f6-8da6-00cf63a49c07" />
+[![CI](https://github.com/luizrn/n8n-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/luizrn/n8n-monitor/actions/workflows/ci.yml)
+[![MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Node 20+](https://img.shields.io/badge/node-20%2B-339933.svg)](https://nodejs.org/)
 
-Painel de alerta para instâncias n8n. Não é um dashboard de análise: a ideia é bater o olho e saber se tem algo errado.
+<img width="1621" height="760" alt="Monitor n8n" src="https://github.com/user-attachments/assets/c7f639e0-6f10-44f6-8da6-00cf63a49c07" />
 
-Responde três perguntas que o n8n não responde bem sozinho:
+Painel operacional para detectar rapidamente erros, execuções travadas, agendamentos perdidos e indisponibilidade de serviços. Funciona com várias instâncias n8n, integra Uptime Kuma e mantém o tratamento dos incidentes em uma fila de Tarefas.
 
-1. **Alguma coisa falhou agora?** — erros agrupados por causa, com diagnóstico pronto para colar.
-2. **Alguma execução ficou presa?** — cronômetro vivo, alerta acima de 30 minutos.
-3. **Os agendamentos rodaram como configurado?** — ocorrências previstas pelo Schedule Trigger cruzadas com as execuções reais.
+Node.js puro, sem dependências npm, framework ou etapa de build.
 
-Zero dependências. Node puro, um arquivo HTML.
+## Funcionalidades
 
----
+| | Recurso | Como funciona |
+|---|---|---|
+| 🚨 | Alertas agrupados | Agrupa falhas repetidas por instância, workflow e nó, preservando magnitude e diagnóstico. |
+| ⏱️ | Execuções travadas | Cronômetro ao vivo e alerta amarelo após 30 minutos. |
+| 📅 | Auditoria de agendamentos | Compara Schedule Trigger, Cron e Interval com as execuções realmente retidas pelo n8n. |
+| 🏷️ | Múltiplas instâncias | Configuração, cache, links, tags e filtros isolados por instância n8n. |
+| ✅ | Resolução automática | Remove o alerta quando uma execução posterior comprova recuperação. |
+| 📋 | Tarefas | Move alertas para Lista ou Kanban com seis estados, notas e histórico. |
+| 📊 | Dashboard | Volume, falhas, taxa de erro, mediana e p95 para períodos de até sete dias. |
+| 🔎 | Logs | Busca e filtros por status, modo, período e instância, com diagnóstico redigido. |
+| 🔔 | Notificação do navegador | Avisa mudanças amarelas e vermelhas quando o Monitor está aberto em segundo plano. |
+| 🔊 | Som | Toca apenas em alerta vermelho, com volume, teste e cooldown anti-spam. |
+| 🪝 | Webhook | Envia abertura, agravamento e resolução em JSON, mesmo sem navegador aberto. |
+| 🟢 | Uptime Kuma | Exibe status, resposta, uptime, manutenção, pausa e monitores selecionáveis. |
+| 🔐 | TLS | Avisa certificado próximo do vencimento, expirado ou inválido. |
+| 🌐 | Domínios | Consulta expiração por RDAP e ignora TLDs sem fonte confiável. |
+| 🐳 | Docker | Imagem não-root, health check, volume persistente e Compose preso ao loopback. |
+| 🧪 | Testes e CI | `node:test`, smoke test do servidor e matriz Node 20/22. |
 
-## Como subir
+## Início rápido
 
-```bash
-git clone <url-deste-repo> && cd n8n-monitor
-node server.mjs
-```
-
-Abre em `http://127.0.0.1:8787`. Escuta **apenas** em `127.0.0.1`.
-
-Na primeira vez, clique em **Configuração** e informe a URL da sua instância e a chave da API (Settings → n8n API no n8n). Ou defina antes de subir:
-
-```bash
-# variável de ambiente do usuário (Windows)
-setx N8N_BASE_URL "https://n8n.suaempresa.com"
-setx N8N_API_KEY  "<sua-chave>"
-```
-
-O servidor semeia a chave a partir dessas variáveis na primeira execução. Em Windows ele também lê a variável direto do registro do usuário, porque `setx` não afeta processos já em execução.
-
-## Onde a chave fica
-
-**Nunca no navegador e nunca no repositório.** Ela é gravada em:
-
-```
-%LOCALAPPDATA%\n8n-monitor\config.json      (Windows)
-$HOME/n8n-monitor/config.json               (outros)
-```
-
-com permissão `0600`. O endpoint `GET /api/config` responde apenas `temChave: true|false` — o valor nunca sai do servidor. O campo na tela de configuração vem sempre vazio; deixar vazio mantém a chave atual.
-
-O diagnóstico que o botão **Copiar** gera passa por uma **redação automática de credenciais**: qualquer chave contendo `token`, `apikey`, `secret`, `senha`, `password`, `authorization`, `cookie`, `bearer` ou `credential` sai como `[REDIGIDO]`, e o mesmo vale para o par `{name: "token", value: "..."}` que o n8n usa em parâmetros de nós HTTP. Sem isso, colar o diagnóstico num chat vazaria os tokens que estão em texto puro dentro dos workflows.
-
-## Três páginas
-
-| rota | para quê |
-|---|---|
-| `/` | **Monitor** — bater o olho e saber se tem algo errado agora |
-| `/dashboard` | **Dashboard** — volume, taxa de erro e duração ao longo do tempo |
-| `/logs` | **Logs** — buscar uma execução específica |
-
-Cada uma cabe numa tela, sem rolagem de página. Compartilham `public/base.css`; nenhuma tem build, framework ou dependência.
-
-### Monitor
-
-**Status no topo** — cor e nome, pulsando:
-
-| | |
-|---|---|
-| 🟢 `TUDO OK` | nada errado |
-| 🟡 `ATENÇÃO` | execução travada, agendamento perdendo ocorrências |
-| 🔴 `ERRO` | erro de execução, agendamento que não rodou |
-| 🔴 `N8N OFFLINE` | painel no ar, instância inalcançável |
-| ⚫ `PAUSADO` | coleta suspensa |
-
-**Cartões de problema** — um por causa, não um por ocorrência. Um fluxo que falhou 200 vezes pelo mesmo motivo é **uma** linha com `×200` e a janela de tempo. Cada cartão traz o nó que falhou, a mensagem, um botão que copia o diagnóstico completo e o link para o n8n.
-
-**Linha de saúde** — tudo que está bem cabe em uma linha.
-
-**À direita**: números da última hora, execuções por minuto, o que está rodando com cronômetro vivo e o resumo dos agendamentos. A tabela completa abre em modal, para não custar altura.
-
-**Toasts acumulativos** no canto inferior direito, para alertas vermelhos e amarelos. Um toast por **problema**, não por ocorrência:
-
-- chave inédita → abre um toast
-- mesma chave, mesma magnitude → **silêncio** (o painel consulta a cada 10s; sem isso um único fluxo quebrado geraria seis toasts por minuto)
-- mesma chave, magnitude maior → atualiza o contador `×N`, reinicia o tempo e dá um pulso, porque a situação piorou de verdade
-
-O controle no rodapé ajusta o tempo até fechar, de **5 a 60 segundos**, e fica salvo no navegador. Passar o mouse sobre um toast congela a contagem — ninguém consegue ler algo que está fugindo. Ficam no máximo cinco na tela; os mais antigos saem.
-
-Na primeira carga os toasts ficam suprimidos de propósito: os cartões já mostram o estado, e toast deve significar *mudou desde que você está olhando*.
-
-**Alertas se resolvem sozinhos.** Se o fluxo que falhou voltar a rodar com sucesso depois do erro, o alerta some e o rodapé registra `✓ N resolvido(s) sozinho(s)`, nomeando a execução que provou. Alerta que depende de alguém lembrar de fechar vira lixo acumulado na tela.
-
-Quando precisar fechar na mão, cada cartão tem dois botões:
-
-| botão | efeito |
-|---|---|
-| **Resolvido** | some da lista |
-| **Em análise** | continua visível, apagado, sem gerar toast; vira **Reativar** |
-
-O reconhecimento guarda a magnitude do momento em que foi feito. Se o erro voltar a crescer, o alerta **reaparece sozinho** — reconhecer silencia o que você já viu, nunca o que ainda vai acontecer. Fica em `reconhecimentos.json` ao lado da config, não no navegador, porque "em análise" é informação de equipe; expira em 7 dias.
-
-### Dashboard
-
-Períodos de 1h a 7d. Traz execuções, erros, taxa de erro, fluxos ativos e duração mediana e p95; o gráfico de volume ao longo do tempo; e três recortes — **maior volume**, **mais falhas** e **mais lentos (p95)**.
-
-Quando a retenção não cobre o período pedido, um aviso diz quantas horas o banco realmente guarda. Pedir 7 dias não cria histórico que já foi podado, e o painel prefere avisar a desenhar um gráfico enganoso.
-
-O botão **Copiar resumo** gera um relatório em markdown do período inteiro.
-
-### Logs
-
-Busca instantânea por nome do fluxo ou número da execução — o servidor filtra sobre um cache curto, então não há chamada remota a cada tecla. Filtros de status, modo e período aparecem como botões **com o contador do que cada clique vai produzir**.
-
-Clicar numa linha abre o diagnóstico completo daquela execução, com credenciais redigidas e pronto para copiar. `/` foca a busca, `Esc` limpa.
-
-## Agendamentos: configurado × executou
-
-Lê a configuração de cada `Schedule Trigger` (também os nós legados `Cron` e `Interval`), calcula as ocorrências previstas **no fuso do próprio workflow** e cruza com as execuções reais, com tolerância de atraso configurável.
-
-O avaliador de cron é próprio, sem biblioteca: aceita 5 e 6 campos, listas, faixas, passos e o comportamento OU entre dia-do-mês e dia-da-semana. Ele varre a janela minuto a minuto e converte fuso pelo `Intl`, então horário de verão sai correto de graça.
-
-**Uma ressalva que importa:** cada linha só é julgada no intervalo em que existe execução retida como prova. Se o n8n já podou o histórico, o veredito é `sem execução retida`, nunca "falhou". Leia [docs/decisoes.md](docs/decisoes.md#nunca-inferir-falha-da-ausência-de-dado) para o porquê — essa regra nasceu de um erro real.
-
-## Monitor em background
-
-Além do painel, há um script que emite uma linha por evento — feito para ser consumido por um agente ou redirecionado para um log:
-
-```powershell
-pwsh -File scripts/watch-n8n.ps1
-```
-
-```
-ERRO 981204 | Sincroniza CX | 2026-08-10T14:02:11Z | https://.../executions/981204
-TRAVADA 980390 | Base de clientes CX | rodando ha 149 min | https://.../executions/980390
-```
-
-## Utilitários de diagnóstico
+### Node.js
 
 ```bash
-node scripts/diag-exec.mjs <id-da-execucao>    # peso e tempo por nó, sem imprimir os dados
-node scripts/dump-wf.mjs <id-do-workflow> [nó...]  # nós, conexões e o código dos nós escolhidos
+git clone https://github.com/luizrn/n8n-monitor.git
+cd n8n-monitor
+npm start
 ```
 
-O `diag-exec` existe para achar o nó culpado numa execução grande sem afogar o terminal: ele soma bytes e tempo **por nó**. O nó com tempo desproporcional ao número de itens é o problema. Foi assim que encontramos uma execução de 64 MB gastando 4,5 s por item.
+Abra `http://127.0.0.1:8787`, entre em **Configurações** e adicione uma instância n8n.
+
+### Docker Compose
+
+```bash
+docker compose up -d --build
+docker compose ps
+```
+
+O Compose publica somente `127.0.0.1:8787` e mantém configuração, tarefas e estado no volume `n8n-monitor-data`.
+
+```bash
+docker compose logs -f monitor
+docker compose down                 # preserva o volume
+docker compose down --volumes       # remove também os dados persistidos
+```
+
+Não exponha o painel diretamente à internet: ele é uma ferramenta administrativa sem autenticação própria. Use VPN ou proxy autenticado quando precisar de acesso remoto.
+
+## Configuração
+
+As quatro abas ficam no Monitor:
+
+- **Instâncias n8n:** nome, URL, API key, ativação e teste individual.
+- **Notificações:** duração do toast de 0 a 600 segundos, navegador, som e volume.
+- **Uptime Kuma:** URL, API key, slug público opcional, antecedência e seleção de monitores.
+- **Webhook:** URL, Bearer opcional, ativação e envio de teste.
+
+Campos secretos sempre chegam vazios ao navegador. Deixá-los vazios ao salvar preserva o valor atual.
+
+Variáveis disponíveis:
+
+| Variável | Padrão | Uso |
+|---|---|---|
+| `HOST` | `127.0.0.1` | Interface de rede do servidor. |
+| `PORT` | `8787` | Porta HTTP. |
+| `N8N_MONITOR_DATA_DIR` | diretório do usuário | Local dos arquivos persistidos. |
+| `N8N_BASE_URL` | `http://localhost:5678` | Semeia a primeira instância. |
+| `N8N_API_KEY` | vazio | Semeia a chave da primeira instância. |
+
+Dados ficam em `%LOCALAPPDATA%\n8n-monitor` no Windows, `$HOME/n8n-monitor` em outros sistemas ou no diretório definido pela variável. Arquivos sensíveis usam permissão `0600`.
+
+## Rotas
+
+| Rota | Tela |
+|---|---|
+| `/` | Monitor e Configurações |
+| `/tarefas` | Lista e Kanban de pendências |
+| `/dashboard` | Métricas históricas |
+| `/logs` | Busca de execuções |
+| `/api/health` | Health check sem dados sensíveis |
+
+## Semântica dos alertas
+
+Cada problema possui uma chave estável. Uma consulta igual permanece em silêncio; magnitude maior gera agravamento. **Em análise** move o item para Tarefas e o remove do Monitor. **Resolvido** reconhece a magnitude atual. Quando a fonte realmente se recupera, o reconhecimento é limpo e uma recorrência futura volta a aparecer.
+
+O webhook usa a mesma máquina de estados e envia `opened`, `worsened` e `resolved`. Consulte [docs/arquitetura.md](docs/arquitetura.md) para o schema.
+
+## Desenvolvimento
+
+```bash
+npm test
+npm run check
+npm start
+```
+
+Veja [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) e [CHANGELOG.md](CHANGELOG.md).
 
 ## Documentação
 
-- [docs/arquitetura.md](docs/arquitetura.md) — como funciona, endpoints, formato dos dados
-- [docs/decisoes.md](docs/decisoes.md) — por que é assim, e os erros que moldaram o desenho
-- [docs/operacao.md](docs/operacao.md) — retenção, concorrência e os ajustes de instância que o painel assume
+- [Arquitetura](docs/arquitetura.md): componentes, dados, APIs e payloads.
+- [Decisões](docs/decisoes.md): critérios de confiabilidade e anti-spam.
+- [Operação](docs/operacao.md): instalação, segurança e troubleshooting.
 
-## Requisitos
+## Licença
 
-- Node 18+ (usa `fetch` nativo)
-- Uma chave de API do n8n com permissão de leitura de workflows e execuções
-- PowerShell 7+ apenas para `scripts/watch-n8n.ps1` e para a leitura da chave no registro do Windows
+[MIT](LICENSE) © 2026 Luiz Fernando Riva Nekel.

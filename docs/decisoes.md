@@ -1,89 +1,46 @@
 # Decisões de projeto
 
-Cada item aqui existe porque a alternativa foi tentada e falhou. Estão registrados para que ninguém "simplifique" de volta.
+## Confiabilidade antes de volume
 
-## Nunca inferir falha da ausência de dado
+Ausência de execução retida não prova que um agendamento falhou. O comparador só julga o período coberto por dados reais e mostra `sem-dados` quando a retenção não permite conclusão.
 
-**A regra:** um agendamento só é julgado no intervalo em que existe execução retida como prova. Sem execução no período, o veredito é `sem-dados`, nunca "não executou".
+Uma instância offline também não produz zeros: ela gera alerta vermelho com nome e motivo, enquanto as demais continuam sendo coletadas.
 
-**Por quê:** a primeira versão comparava as ocorrências previstas contra as execuções encontradas nas últimas 24 horas e acusou **9 agendamentos com falha**, incluindo "72 previstas, 6 cumpridas". Era falso. Seis execuções a cada 20 minutos são exatamente 2 horas — o que o banco ainda guardava. O código estava contando como perdido tudo que a retenção havia apagado.
+## Identidade inclui instância
 
-Depois da correção: zero falsos positivos, e cinco agendamentos confirmados em dia com atraso de 17 a 50 segundos.
+Workflow e execução podem repetir IDs em servidores diferentes. Chaves, caches, diagnósticos e links incluem `instanciaId`; fluxos homônimos permanecem separados.
 
-Um monitor que inventa falha é pior que nenhum monitor: manda o time caçar problema que não existe e ensina a ignorar o alerta. A coluna **verificado** existe justamente para deixar explícito o quanto foi possível conferir.
+## Anti-spam por mudança
 
-## A chave nunca chega ao navegador
+Polling não é evento. Toast, navegador, som e webhook atravessam o mesmo portão:
 
-Todo acesso ao n8n passa pelo servidor local. O endpoint de config responde `temChave: true|false`, jamais o valor.
+- chave nova: abre;
+- mesma assinatura: silêncio;
+- severidade ou magnitude maior: agrava;
+- chave ausente: resolve.
 
-Isso não é só higiene: é o que permite ter **um único ponto** de redação de segredos. Os workflows deste tipo de instância costumam ter tokens em texto puro nos parâmetros dos nós HTTP, e o botão "copiar diagnóstico" existe para o conteúdo ser colado num chat. Sem redação centralizada, a ferramenta feita para ajudar a depurar vazaria credencial a cada uso.
+O som possui ainda cooldown global de oito segundos. Notificação do sistema é silenciosa porque o áudio é controlado separadamente.
 
-## Erro agrupado por causa, não por ocorrência
+## Em análise move, não esconde
 
-Um fluxo em loop pode falhar centenas de vezes pelo mesmo motivo em minutos. Listar ocorrência por ocorrência esconde os outros problemas atrás de uma parede de linhas idênticas.
+Reconhecimento sem fila faria o problema desaparecer da rotina. **Em análise** remove do Monitor e cria uma tarefa com histórico. Recuperação confirmada move a tarefa para Resolvido; recorrência reaparece no Monitor e só reabre a tarefa após nova ação humana.
 
-O agrupamento é por fluxo + nó + mensagem, com contador e janela de tempo. O detalhe é buscado só para o exemplar mais recente de cada grupo: buscar por ocorrência custaria uma requisição por linha para descobrir sempre a mesma coisa.
+## Coleta pertence ao servidor
 
-## Paginar em vez de confiar no `limit`
+Webhook precisa funcionar sem navegador. Por isso o processo coleta continuamente e as telas apenas leem o snapshot. Esse desenho também evita que cinco abas multipliquem a carga na API do n8n.
 
-A API do n8n limita a 250 resultados por página. A primeira versão pedia 250 e reportava o número como total da hora — exibindo "250 execuções" quando o real era maior. O painel mentia para baixo exatamente quando o volume explodia, que é quando o número importa.
+## Segredos nunca voltam ao cliente
 
-Agora segue o `nextCursor` até cobrir a janela, e quando ainda há páginas mostra `≥` no lugar do número exato. Um teto de leitura declarado é honesto; um teto silencioso não.
+Campos de senha vazios significam “manter”. Diagnósticos percorrem objetos e redigem nomes associados a token, senha, cookie, autorização e credencial. O webhook recebe apenas o contrato público do alerta.
 
-## Não é um dashboard
+## Kuma por interfaces públicas
 
-A hierarquia é invertida de propósito: o veredito ocupa o topo em corpo grande, cada problema é um cartão, e tudo que está bem cabe numa linha. Gráfico, tabela de agendamentos e volume por fluxo ficam dobrados.
+O projeto permanece sem dependências. A integração usa Prometheus com API key e páginas de status públicas para fallback. Socket.IO interno não é consumido porque é acoplado à implementação e exigiria biblioteca externa.
 
-Sem problema algum, a tela fica praticamente vazia com o topo verde. A informação que interessa a quem olha um monitor é binária — tem algo errado ou não — e ela precisa ser legível a metros de distância.
+## Domínio somente com RDAP verificável
 
-## O ponto de status é mais vivo que o texto
+O resolvedor usa o bootstrap DNS da IANA e tenta o hostname do monitor até encontrar o domínio registrado. Resultado é armazenado por 24h. Falta de endpoint ou data de expiração é desconhecida, não falha.
 
-O ponto de `ATENÇÃO` usa um amarelo saturado; o texto usa um âmbar mais escuro. Não é inconsistência: forma não precisa passar em contraste de leitura, texto precisa. Amarelo puro em texto sobre fundo claro é ilegível.
+## Docker não implica exposição pública
 
-O estado nunca é comunicado só por cor — sempre há o nome do status ao lado, e a animação respeita `prefers-reduced-motion`.
-
-## Contar a mesma coisa nos dois lugares
-
-A linha de saúde conta erros a partir dos **mesmos grupos** que geram os cartões, não da janela de uma hora. Antes disso, o topo dizia "1 coisa precisa de atenção" enquanto a linha logo abaixo dizia "0 erros na última hora" — porque o cartão vinha do fallback para erros mais antigos.
-
-Estavam ambos certos e o conjunto estava errado. Um painel que se contradiz perde a credibilidade inteira, não só o número divergente.
-
-## Toast alerta mudança, não estado
-
-O painel consulta a API a cada 10 segundos. Um toast por resultado de consulta significaria seis alertas por minuto para um único fluxo quebrado — e um alerta que aparece sozinho seis vezes por minuto é um alerta que se aprende a ignorar.
-
-Por isso o toast tem chave estável e só se manifesta quando algo **muda**:
-
-| situação | o que acontece |
-|---|---|
-| chave inédita | abre |
-| mesma chave, mesma magnitude | silêncio |
-| mesma chave, magnitude maior | contador `×N`, tempo reiniciado, pulso |
-
-Silêncio passa a significar "estável" e movimento passa a significar "piorou". É a mesma lógica do agrupamento de erros, aplicada ao tempo em vez de à lista.
-
-A supressão na primeira carga vem do mesmo raciocínio: abrir a página com cinco problemas já visíveis nos cartões e receber cinco toasts é ruído, não informação.
-
-E o mouse sobre o toast congela a contagem. Um alerta que foge antes de ser lido não alertou nada.
-
-## Alerta se fecha sozinho quando o problema passou
-
-Se o fluxo que falhou voltou a rodar com sucesso **depois** do erro, o alerta sai da lista sem ninguém clicar em nada, e o rodapé registra qual execução provou isso.
-
-Um painel que exige gesto humano para limpar acumula alertas de problemas que já passaram. Depois de alguns dias, a lista deixa de descrever o presente — e um painel que descreve o passado não é consultado.
-
-O reconhecimento manual existe para o que a máquina não consegue decidir, e guarda a **magnitude** do momento: se o erro voltar a crescer, o alerta reaparece. Reconhecer silencia o que já se viu, nunca o que ainda vai acontecer. É a mesma regra do toast, aplicada à lista.
-
-Fica em disco, ao lado da config, e não no `localStorage`: marcar algo como "em análise" é informação de equipe, e some se ficar preso ao navegador de uma pessoa.
-
-## Filtrar na entrada do webhook, não depois
-
-Os fluxos que ouvem `crm_deal_updated` recebem evento de **toda** negociação do CRM e descartam a maioria no primeiro `If`. Só que descartar num `If` já custou uma execução: registro no banco, um slot de worker e, quando há um `Wait` antes do gate, segundos de espera por evento inútil.
-
-`options.onlyRunIf` no nó Webhook avalia a condição **antes de criar a execução** — requisição que não passa recebe 200 e desaparece. O filtro replica o gate que o fluxo já tinha, então o comportamento não muda; só o desperdício.
-
-E ele **falha aberto**: expressão que não avalia deixa a requisição passar, e os gates originais continuam no lugar. O risco é gastar execução à toa, nunca perder evento — que é a assimetria certa para um filtro de entrada.
-
-## Sem dependências
-
-Node 18+ tem `fetch`. Um avaliador de cron cabe em 150 linhas. Um painel cabe num HTML. Não há build, não há `node_modules`, não há alerta de vulnerabilidade em transitiva de biblioteca de gráfico — para uma ferramenta que existe para ser confiável quando o resto está quebrado, isso é o requisito principal.
+O processo escuta `0.0.0.0` dentro do container para permitir o mapeamento, mas o Compose publica em `127.0.0.1`. O painel não implementa login e deve ficar atrás de VPN ou proxy autenticado.
