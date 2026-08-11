@@ -28,7 +28,7 @@ Retenção curta limita Dashboard e auditoria de cron. Ajuste a retenção do n8
 
 ## Uptime Kuma
 
-Crie uma API key com acesso a `/metrics`, informe a URL base e use **Testar e listar monitores**. Todos chegam selecionados por padrão. O slug de página pública é opcional e só serve como fallback de uptime 24h.
+Crie uma API key com acesso a `/metrics` e informe a URL base. Ao abrir Configurações, o painel usa a credencial salva para carregar a lista automaticamente; cada item indica **No Monitor** ou **Fora do Monitor** conforme sua seleção. Monitores novos chegam selecionados por padrão. Use **Testar e listar monitores** para retestar após alterar URL, chave ou slug. O slug de página pública é opcional e só serve como fallback de uptime 24h.
 
 Estados:
 
