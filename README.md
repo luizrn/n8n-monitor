@@ -4,6 +4,13 @@
 
 [![MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Node 20+](https://img.shields.io/badge/node-20%2B-339933.svg)](https://nodejs.org/)
+<img width="1902" height="909" alt="image" src="https://github.com/user-attachments/assets/8d1e59fd-54e7-403b-a248-81fa63ee8441" />
+<img width="1896" height="859" alt="image" src="https://github.com/user-attachments/assets/40069a6b-ef2a-4ff4-9a1b-e2b1ba51e54a" />
+<img width="1895" height="909" alt="image" src="https://github.com/user-attachments/assets/7175d343-5360-4abb-a34f-8fe6a446b5f7" />
+<img width="1879" height="840" alt="image" src="https://github.com/user-attachments/assets/3142981c-b122-444a-b7ad-a999254a364b" />
+<img width="1014" height="459" alt="image" src="https://github.com/user-attachments/assets/78d50c58-c4d1-4407-bf48-b76f4e0cba2b" />
+
+
 
 <img width="1621" height="760" alt="Monitor unificado para n8n e Uptime Kuma" src="https://github.com/user-attachments/assets/c7f639e0-6f10-44f6-8da6-00cf63a49c07" />
 
