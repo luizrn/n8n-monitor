@@ -43,6 +43,8 @@ window.I18n = (() => {
     'Fechar toast automaticamente': 'Close toast automatically', 'Notificações do navegador': 'Browser notifications',
     'Som em alertas vermelhos': 'Sound for red alerts', 'Volume': 'Volume', 'manual': 'manual',
     'Ativar Uptime Kuma': 'Enable Uptime Kuma', 'Ativada no Monitor': 'Enabled in Monitor', 'Desativada': 'Disabled',
+    'Recomendamos o Uptime Kuma self-hosted para monitorar serviços e aplicações online. Depois de configurá-lo, você pode conectá-lo a este monitor.': 'We recommend the self-hosted Uptime Kuma service for monitoring online services and applications. Once configured, you can connect it to this monitor.',
+    'Acesse o projeto no GitHub.': 'View the project on GitHub.',
     'URL base': 'Base URL', 'deixe vazio para manter': 'leave blank to keep current value',
     'Slug da página pública': 'Public status page slug', 'opcional, fallback de uptime 24h': 'optional, 24h uptime fallback',
     'Avisar expiração com antecedência (dias)': 'Warn before expiration (days)',
