@@ -15,6 +15,24 @@ test('normaliza alertas e isola chaves por instancia', () => {
   assert.equal(assinaturaAlerta(alertas[0]), 'ruim|2')
 })
 
+test('respeita o limite de travada por fluxo, nao o global', () => {
+  const base = {
+    instancias: [{ id: 'a', nome: 'A', baseUrl: 'https://a', alcancavel: true }],
+    inalcancaveis: [], erros: [], limiteTravadaMin: 30,
+  }
+  const lento = { id: '8', instanciaId: 'a', instancia: 'A', workflowId: 'devagar', fluxo: 'Lento por natureza', minutos: 42, limiteMin: 60 }
+  const normal = { id: '9', instanciaId: 'a', instancia: 'A', workflowId: 'comum', fluxo: 'Comum', minutos: 42, limiteMin: 30 }
+
+  const alertas = montarAlertas({ ...base, rodando: [lento, normal] }, { linhas: [] }, { ok: false })
+  // 42 min passa do global de 30, mas a excecao do fluxo lento e 60: so o outro alerta
+  assert.deepEqual(alertas.map((a) => a.chave), ['travada:a:9'])
+  assert.match(alertas[0].detalhe, /limite 30 min/)
+
+  // sem limiteMin (estado antigo), cai no global e volta a alertar
+  const semCampo = montarAlertas({ ...base, rodando: [{ ...lento, limiteMin: undefined }] }, { linhas: [] }, { ok: false })
+  assert.deepEqual(semCampo.map((a) => a.chave), ['travada:a:8'])
+})
+
 test('mapeia severidade equilibrada do Kuma e expiracoes', () => {
   const alertas = montarAlertas({}, {}, { ok: true, baseUrl: 'https://kuma', limiteCertDias: 21, monitores: [
     { id: '1', nome: 'API', ativo: true, situacao: 'desligado', certDias: 4, certValido: true, alvo: 'https://api.tld' },

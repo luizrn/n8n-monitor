@@ -48,3 +48,21 @@ O resolvedor usa o bootstrap DNS da IANA e tenta o hostname do monitor até enco
 ## Docker não implica exposição pública
 
 O processo escuta `0.0.0.0` dentro do container para permitir o mapeamento, mas o Compose publica em `127.0.0.1`. O painel não implementa login e deve ficar atrás de VPN ou proxy autenticado.
+
+## Limite de execução travada é por fluxo, não único
+
+Existe um limite padrão (30 min) e exceções por fluxo, guardadas como `"<instanciaId>|<workflowId>" -> minutos`. O servidor resolve o limite de cada execução e devolve `limiteMin` junto dela; painel, toasts e destinos de envio julgam todos pelo mesmo número.
+
+**Por quê:** o `Base CX - Contrato BI` leva ~42 minutos em toda execução — 41,4 a 42,4 min em sete rodadas seguidas — e termina em sucesso. Com um limite único de 30 minutos ele acusava travamento a cada rodada. Reconhecer no botão não resolvia: a chave do alerta inclui o id da execução, então cada nova rodada criava um alerta novo.
+
+Um alerta que aparece todo dia no mesmo lugar sem nada de errado é pior que nenhum alerta — ensina o time a ignorar o painel inteiro, inclusive quando ele estiver certo. É a mesma razão pela qual agrupamos erros por causa e pela qual o toast só se manifesta quando algo muda.
+
+A chave junta instância e fluxo porque os ids de workflow do n8n são locais à instância: sem o prefixo, uma exceção criada para um fluxo silenciaria um homônimo de id igual na outra instância.
+
+## Salvar mal é melhor que não salvar
+
+A gravação de configuração escreve num arquivo temporário e renomeia, para que nunca exista um arquivo meio escrito. Quando o `rename` falha, cai para escrita direta.
+
+**Por quê:** em alguns ambientes Windows — pasta redirecionada, sincronização em nuvem, antivírus — o `rename` falha com `EXDEV` mesmo com origem e destino no mesmo diretório. O efeito era traiçoeiro: a resposta da tela vinha da memória e parecia salva, enquanto o disco continuava com o valor antigo. A configuração só se revelava perdida no próximo restart.
+
+Escrita direta tem uma janela em que uma queda deixaria o arquivo incompleto. É um risco menor que perder a configuração silenciosamente.
