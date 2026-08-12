@@ -78,6 +78,17 @@ const PADRAO = {
   fuso: 'America/Cuiaba',   // usado quando o workflow nao define timezone proprio
   horasCron: 24,            // janela da conferencia configurado-vs-executou
   toleranciaMin: 5,         // atraso aceito antes de considerar ocorrencia perdida
+  // Acima de quantos minutos uma execucao em andamento vira alerta de "travada".
+  limiteTravadaMin: 30,
+  // Excecoes por fluxo: "<instanciaId>|<workflowId>" -> minutos.
+  //
+  // POR QUE ISSO EXISTE: um limite unico para a instancia inteira acusa como
+  // travado todo fluxo que e lento POR NATUREZA. O "Base CX - Contrato BI" leva
+  // ~42 minutos em toda execucao, sempre terminando em sucesso; com limite
+  // global de 30 ele alertava a cada rodada. Alerta que dispara todo dia no
+  // mesmo lugar sem nada de errado ensina o time a ignorar o painel — que e
+  // exatamente o oposto do que este projeto existe para fazer.
+  limitesTravada: {},
   notificacoes: { ...NOTIF_PADRAO },
   uptimeKuma: { ...UPTIME_PADRAO },
   webhook: { ...WEBHOOK_PADRAO },
@@ -90,20 +101,52 @@ const numeroLimitado = (valor, minimo, maximo, padrao) => {
   return Number.isFinite(numero) ? Math.max(minimo, Math.min(maximo, numero)) : padrao
 }
 
+// A chave junta instancia e fluxo porque os ids de workflow do n8n sao locais a
+// instancia: sem o prefixo, uma excecao criada para um fluxo silenciaria um
+// homonimo de id igual na outra instancia.
+const chaveLimite = (instanciaId, workflowId) => `${instanciaId}|${workflowId}`
+
+function saneaLimitesTravada(cru) {
+  const saida = registroSeguro()
+  for (const [chave, valor] of Object.entries(registroSeguro(cru))) {
+    if (!/^[^|]+\|[^|]+$/.test(chave)) continue
+    const minutos = Number(valor)
+    if (!Number.isFinite(minutos) || minutos < 1) continue
+    saida[chave] = Math.min(1440, Math.round(minutos))
+  }
+  return saida
+}
+
+// Limite efetivo de uma execucao: excecao do fluxo, senao o padrao da instalacao.
+const limiteTravadaDe = (instanciaId, workflowId) =>
+  config.limitesTravada[chaveLimite(instanciaId, workflowId)] ?? config.limiteTravadaMin
+
 let sequenciaGravacao = 0
 async function gravarPrivado(caminho, conteudo) {
   await mkdir(dirname(caminho), { recursive: true })
   const temporario = `${caminho}.${process.pid}.${Date.now()}.${++sequenciaGravacao}.tmp`
   try {
     await writeFile(temporario, conteudo, { mode: 0o600 })
-    await rename(temporario, caminho)
+    try {
+      await rename(temporario, caminho)
+    } catch (erro) {
+      // Trocar por rename e o ideal: ou o arquivo antigo continua inteiro, ou o
+      // novo aparece completo, nunca um meio-termo. So que em alguns ambientes
+      // Windows (pasta redirecionada, sincronizacao em nuvem, antivirus) o
+      // rename falha mesmo dentro do MESMO diretorio, com EXDEV ou EPERM — e ai
+      // a gravacao inteira se perdia em silencio para quem so olhava a tela,
+      // porque a resposta vinha da memoria e o disco ficava para tras.
+      // Escrita direta e menos segura contra queda no meio, mas salvar mal e
+      // melhor que nao salvar.
+      if (!['EXDEV', 'EPERM', 'EACCES', 'EBUSY'].includes(erro?.code)) throw erro
+      await writeFile(caminho, conteudo, { mode: 0o600 })
+    }
     await chmod(caminho, 0o600).catch(() => {})
   } finally {
     await rm(temporario, { force: true }).catch(() => {})
   }
 }
 
-const LIMITE_TRAVADA_MIN = 30
 const JANELA_MS = 3600000
 const ehErro = (s) => s === 'error' || s === 'crashed'
 
@@ -187,6 +230,8 @@ function migrar(cru) {
   c.uptimeKuma = { ...UPTIME_PADRAO, ...(cru?.uptimeKuma || {}) }
   c.horasCron = numeroLimitado(c.horasCron, 1, 168, PADRAO.horasCron)
   c.toleranciaMin = numeroLimitado(c.toleranciaMin, 0, 1440, PADRAO.toleranciaMin)
+  c.limiteTravadaMin = numeroLimitado(c.limiteTravadaMin, 1, 1440, PADRAO.limiteTravadaMin)
+  c.limitesTravada = saneaLimitesTravada(c.limitesTravada)
   c.notificacoes.toastSeg = numeroLimitado(c.notificacoes.toastSeg, 0, 600, NOTIF_PADRAO.toastSeg)
   c.notificacoes.volume = numeroLimitado(c.notificacoes.volume, 0, 1, NOTIF_PADRAO.volume)
   c.notificacoes.navegador = c.notificacoes.navegador === true
@@ -467,7 +512,12 @@ async function montarEstado() {
   const gruposErro = todosGrupos.filter((g) => !g.resolvidoPor)
   const gruposResolvidos = todosGrupos.filter((g) => g.resolvidoPor)
 
-  const rodando = vivos.flatMap((v) => v.rodando).sort((a, b) => (b.minutos ?? 0) - (a.minutos ?? 0))
+  // Cada execucao carrega o limite que vale PARA ELA. Resolver aqui, e nao no
+  // navegador, mantem uma fonte unica de verdade: o painel, os toasts e os
+  // destinos de envio julgam todos pelo mesmo numero.
+  const rodando = vivos.flatMap((v) => v.rodando)
+    .map((e) => ({ ...e, limiteMin: limiteTravadaDe(e.instanciaId, e.workflowId) }))
+    .sort((a, b) => (b.minutos ?? 0) - (a.minutos ?? 0))
   const umaHora = vivos.flatMap((v) => v.umaHora)
   const recentes = vivos.flatMap((v) => v.recentes)
 
@@ -502,7 +552,7 @@ async function montarEstado() {
       errosHora: umaHora.filter((e) => ehErro(e.status)).length,
       execucoesHora: umaHora.length,
       rodando: rodando.length,
-      travadas: rodando.filter((e) => (e.minutos ?? 0) >= LIMITE_TRAVADA_MIN).length,
+      travadas: rodando.filter((e) => (e.minutos ?? 0) >= e.limiteMin).length,
       porMinuto: umaHora.length / 60,
       truncado: vivos.some((v) => v.truncado),
     },
@@ -514,7 +564,7 @@ async function montarEstado() {
     tarefasContagem: repoTarefas.contagem(),
     rodando,
     porFluxo: vivos.flatMap((v) => v.porFluxo).sort((a, b) => b.total - a.total).slice(0, 12),
-    limiteTravadaMin: LIMITE_TRAVADA_MIN,
+    limiteTravadaMin: config.limiteTravadaMin,
   }
 }
 
@@ -856,6 +906,25 @@ const servidor = createServer(async (req, res) => {
     }
 
     // ---------------------------------------------------------- config
+    // Fluxos conhecidos, para a tela de configuracao oferecer uma lista em vez
+    // de exigir que alguem digite o id do workflow na mao.
+    if (url.pathname === '/api/fluxos' && req.method === 'GET') {
+      const ativas = instanciasAtivas()
+      const lotes = await Promise.all(ativas.map(async (inst) => {
+        try {
+          const nomes = await clienteDe(inst).nomesDeFluxos()
+          return [...nomes.entries()].map(([id, nome]) => ({
+            instanciaId: inst.id, instancia: inst.nome, id, nome,
+          }))
+        } catch { return [] }
+      }))
+      return json(res, 200, {
+        ok: true,
+        itens: lotes.flat().sort((a, b) =>
+          a.instancia.localeCompare(b.instancia) || a.nome.localeCompare(b.nome)),
+      })
+    }
+
     if (url.pathname === '/api/config' && req.method === 'GET') {
       const uk = config.uptimeKuma
       return json(res, 200, {
@@ -864,6 +933,8 @@ const servidor = createServer(async (req, res) => {
         idioma: config.idioma,
         tema: config.tema,
         armazenamento: 'privado',
+        limiteTravadaMin: config.limiteTravadaMin,
+        limitesTravada: config.limitesTravada,
         notificacoes: config.notificacoes,
         uptimeKuma: {
           ativo: uk.ativo, baseUrl: uk.baseUrl, slug: uk.slug,
@@ -900,6 +971,13 @@ const servidor = createServer(async (req, res) => {
       if (typeof corpo.ativo === 'boolean') config.ativo = corpo.ativo
       if (['pt-BR', 'en'].includes(corpo.idioma)) config.idioma = corpo.idioma
       if (['escuro', 'claro'].includes(corpo.tema)) config.tema = corpo.tema
+
+      if (corpo.limiteTravadaMin !== undefined) {
+        config.limiteTravadaMin = numeroLimitado(corpo.limiteTravadaMin, 1, 1440, config.limiteTravadaMin)
+      }
+      if (corpo.limitesTravada && typeof corpo.limitesTravada === 'object') {
+        config.limitesTravada = saneaLimitesTravada(corpo.limitesTravada)
+      }
 
       if (corpo.notificacoes && typeof corpo.notificacoes === 'object') {
         const n = corpo.notificacoes

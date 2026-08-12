@@ -35,12 +35,16 @@ export function montarAlertas(estado = {}, cron = {}, uptime = {}) {
     })
   }
 
-  for (const e of (estado.rodando || []).filter((x) => (x.minutos ?? 0) >= (estado.limiteTravadaMin || 30))) {
+  // `limiteMin` vem resolvido do servidor e ja considera a excecao do fluxo;
+  // o limite global e so o fallback para estado antigo sem esse campo.
+  const limiteDe = (x) => x.limiteMin ?? estado.limiteTravadaMin ?? 30
+
+  for (const e of (estado.rodando || []).filter((x) => (x.minutos ?? 0) >= limiteDe(x))) {
     alertas.push({
       chave: `travada:${e.instanciaId}:${e.id}`, origem: 'n8n', nivel: 'atencao',
       tipo: 'execução travada', titulo: e.fluxo,
       resumo: `${e.fluxo}: ${duracao(e.minutos)} rodando`,
-      detalhe: `em execução há ${duracao(e.minutos)}; limite ${estado.limiteTravadaMin || 30} min`,
+      detalhe: `em execução há ${duracao(e.minutos)}; limite ${limiteDe(e)} min`,
       magnitude: Math.max(1, Math.floor(e.minutos || 1)),
       instanciaId: e.instanciaId, instancia: e.instancia,
       workflowId: e.workflowId, executionId: e.id,
