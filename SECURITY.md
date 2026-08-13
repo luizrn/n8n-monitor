@@ -4,7 +4,7 @@
 
 ## Versões suportadas
 
-O projeto ainda não publica releases versionadas. A branch `main` é a única versão suportada até a criação da primeira tag estável.
+O projeto publica a versão **2.0.0**. A branch `main` e essa tag são as versões suportadas.
 
 ## Relatando uma vulnerabilidade
 
@@ -21,4 +21,4 @@ O mantenedor confirmará o recebimento em até sete dias. Correções aceitas se
 
 ## Dados sensíveis
 
-O monitor acessa chaves do n8n, Uptime Kuma e webhooks. Nunca inclua esses valores, arquivos de configuração reais ou diagnósticos sem revisar em um relato público.
+O monitor acessa chaves do n8n, Uptime Kuma e webhooks. Nunca inclua esses valores, o banco SQLite, arquivos de configuração reais ou diagnósticos sem revisar em um relato público.

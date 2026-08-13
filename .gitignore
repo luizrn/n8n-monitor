@@ -8,6 +8,10 @@ config.json
 
 node_modules/
 npm-debug.log*
+dist/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
 
 # saidas de diagnostico (podem conter dados de execucao)
 *.dump.json

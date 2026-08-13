@@ -17,6 +17,8 @@ services:
       - /tmp:size=16m,mode=1777
     environment:
       TZ: America/Cuiaba
+      BETTER_AUTH_SECRET: local-compose-secret-change-me-32chars
+      BETTER_AUTH_URL: http://127.0.0.1:8787
 
 volumes:
   n8n-monitor-data:

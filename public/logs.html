@@ -47,6 +47,8 @@
     <span id="status"><span class="ponto"></span><span id="statusNome">carregando</span></span>
     <span class="cresce"></span>
     <span class="meta" id="resumo"></span>
+    <span class="versao" data-versao title="n8n-monitor"></span>
+    <div class="sessao" id="sessao"></div>
     <button id="btCopiar">Copiar lista</button>
     <button id="btAtualizar">Atualizar</button>
   </div>
@@ -93,6 +95,7 @@
 </div></dialog>
 
 <script src="/i18n.js"></script>
+<script src="/sessao.js"></script>
 <script>
 const $ = s => document.querySelector(s)
 const tr = s => I18n.t(s)
@@ -231,6 +234,7 @@ addEventListener('keydown', ev => {
 
 buscar(false)
 setInterval(() => { if (!$('#dlg').open) buscar(false) }, 30000)
+Sessao.carregar().then(s=>Sessao.montar(document.getElementById('sessao'),s))
 </script>
 </body>
 </html>

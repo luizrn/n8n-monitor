@@ -4,7 +4,7 @@
 
 ## Visão geral
 
-O projeto é um servidor HTTP em Node.js e quatro páginas HTML sem build. O processo mantém clientes e caches separados por instância n8n, coleta os dados em segundo plano e entrega um estado normalizado às telas.
+O projeto é um servidor HTTP em TypeScript (Node.js 22) e páginas HTML sem bundler de frontend. Autenticação usa Better Auth; cada workspace (organization) isola configuração, instâncias n8n, Kuma, tarefas e caches. O processo coleta em segundo plano e entrega um estado normalizado às telas.
 
 ```text
 n8n APIs ─┐
@@ -28,28 +28,34 @@ O coletor impede execuções concorrentes. A interface lê o mesmo snapshot e n�
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `server.mjs` | configuração, HTTP, coleta, caches e diagnóstico |
-| `instancias.mjs` | cliente n8n e caches isolados por instância |
-| `cron.mjs` | interpretação e comparação de agendamentos |
-| `alertas.mjs` | contrato e severidade dos alertas |
-| `uptime.mjs` | parser Prometheus e status Kuma |
-| `rdap.mjs` | descoberta do serviço IANA e expiração de domínio |
-| `tarefas.mjs` | estados, notas, histórico e recuperação |
-| `webhook.mjs` | deduplicação, payload, retry e entrega |
+| `src/server.ts` | HTTP, gate de sessão e APIs |
+| `src/auth.ts` | Better Auth, organizations e admin |
+| `src/db.ts` | SQLite (`node:sqlite`) e tabelas do app |
+| `src/persistencia.ts` | config/tarefas/webhook por workspace e import JSON legado |
+| `src/coleta.ts` | coletor periódico por workspace |
+| `src/instancias.ts` | cliente n8n e caches isolados por `orgId` + instância |
+| `src/cron.ts` | interpretação e comparação de agendamentos |
+| `src/alertas.ts` | contrato e severidade dos alertas |
+| `src/uptime.ts` | parser Prometheus e status Kuma |
+| `src/rdap.ts` | descoberta do serviço IANA e expiração de domínio |
+| `src/tarefas.ts` | estados, notas, histórico e recuperação |
+| `src/webhook.ts` | deduplicação, payload, retry e entrega |
 | `public/toasts.js` | toast, Notification API e Web Audio |
 
 ## Persistência
 
-O diretório é `N8N_MONITOR_DATA_DIR`, `%LOCALAPPDATA%\n8n-monitor` ou `$HOME/n8n-monitor`.
+O diretório é `N8N_MONITOR_DATA_DIR`, `%LOCALAPPDATA%\n8n-monitor` ou `$HOME/n8n-monitor`. O banco é `n8n-monitor.sqlite`.
 
-| Arquivo | Conteúdo |
+Tabelas Better Auth (`user`, `session`, `account`, `organization`, `member`, `invitation`) e tabelas do app com `organization_id`:
+
+| Tabela | Conteúdo |
 |---|---|
-| `config.json` | idioma, tema, instâncias e credenciais, notificações, Kuma e webhook |
-| `reconhecimentos.json` | magnitude reconhecida por alerta |
-| `tarefas.json` | tarefas e histórico de transições |
-| `webhook-estado.json` | assinaturas entregues e último resultado por destino externo |
+| `workspace_config` | idioma, tema, instâncias e credenciais, notificações, Kuma e webhook |
+| `workspace_reconhecimentos` | magnitude reconhecida por alerta |
+| `workspace_tarefas` | tarefas e histórico de transições |
+| `workspace_webhook` | assinaturas entregues e último resultado por destino externo |
 
-Todos os arquivos são substituídos atomicamente e recebem permissão `0600`; registros persistidos usam objetos sem protótipo para impedir chaves perigosas. Segredos e o caminho local nunca aparecem em `GET /api/config`: são substituídos por marcadores como `temChave`, `temToken`, `temUrl`, `temBearer`, `temHeaderValor`, `temEvolutionApiKey` e `temDiscordUrl`.
+No primeiro setup, `config.json`, `tarefas.json`, `reconhecimentos.json` e `webhook-estado.json` legado são importados para o workspace inicial. Segredos e o caminho local nunca aparecem em `GET /api/config`: são substituídos por marcadores como `temChave`, `temToken`, `temUrl`, `temBearer`, `temHeaderValor`, `temEvolutionApiKey` e `temDiscordUrl`.
 
 Reconhecimentos e tarefas ausentes só são resolvidos quando sua fonte respondeu com sucesso no ciclo atual. Uma instância n8n inalcançável ou uma coleta Kuma com falha preserva o estado anterior em vez de produzir uma recuperação falsa.
 
@@ -90,7 +96,7 @@ Quando não há alertas visíveis, o Monitor usa o estado normalizado para exibi
 | WhatsApp / Evolution API | `POST /message/sendText/{instanceName}`, header `apikey` e corpo `{ number, textMessage: { text } }` |
 | Discord | execução do webhook com `wait=true`, `content`, nome configurável e menções desativadas |
 
-Todos os destinos ativos são processados em paralelo. Falha, retry, último resultado e deduplicação de um destino não alteram os demais. Todas as requisições usam `Content-Type: application/json` e `User-Agent: n8n-monitor/1.0`. O payload técnico completo abaixo é enviado somente no modo Webhook HTTP; WhatsApp e Discord recebem uma representação textual sem credenciais.
+Todos os destinos ativos são processados em paralelo. Falha, retry, último resultado e deduplicação de um destino não alteram os demais. Todas as requisições usam `Content-Type: application/json` e `User-Agent: n8n-monitor/2.0.0`. O payload técnico completo abaixo é enviado somente no modo Webhook HTTP; WhatsApp e Discord recebem uma representação textual sem credenciais.
 
 ```json
 {
@@ -120,9 +126,12 @@ Eventos: `opened`, `worsened`, `resolved` e `test`. Resolução inclui `{ "mode"
 
 ## APIs
 
+Rotas públicas: `GET /api/health`, `/api/auth/*`, `/api/setup`, `/api/setup-status`, `/login`, `/setup`, `/aceitar-convite` e assets de tema. O restante exige sessão; HTML sem cookie redireciona para `/login`; APIs respondem `401`.
+
 | Método e rota | Função |
 |---|---|
 | `GET /api/health` | vida do processo, sem segredos |
+| `GET /api/sessao` | usuário, workspaces e workspace ativo |
 | `GET/POST /api/config` | configuração pública e atualização parcial |
 | `POST /api/teste` | testa instância com valores ainda não salvos |
 | `GET /api/state` | snapshot completo e alertas visíveis |

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Entrar — Monitor n8n</title>
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/base.css">
+</head>
+<body>
+<main class="auth">
+  <form class="auth-caixa" id="form">
+    <h1>Monitor n8n</h1>
+    <span class="versao" data-versao title="n8n-monitor"></span>
+    <p class="obs">Entre com e-mail e senha.</p>
+    <label for="email">E-mail</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <label for="senha">Senha</label>
+    <input id="senha" type="password" autocomplete="current-password" required>
+    <div class="erro" id="erro" hidden></div>
+    <div class="linha-btn"><button type="submit">Entrar</button></div>
+  </form>
+</main>
+<script src="/i18n.js"></script>
+<script>
+fetch('/api/setup-status').then(r=>r.json()).then(d=>{if(d.precisaSetup)location.href='/setup'}).catch(()=>{})
+document.getElementById('form').onsubmit=async ev=>{
+  ev.preventDefault()
+  const erro=document.getElementById('erro')
+  erro.hidden=true
+  const r=await fetch('/api/auth/sign-in/email',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:document.getElementById('email').value,password:document.getElementById('senha').value})})
+  const d=await r.json().catch(()=>({}))
+  if(!r.ok){erro.hidden=false;erro.textContent=d.message||d.erro||I18n.t('Não foi possível entrar.');return}
+  const s=await fetch('/api/sessao').then(x=>x.json()).catch(()=>({}))
+  location.href=s.mustChangePassword?'/trocar-senha':'/'
+}
+</script>
+</body>
+</html>

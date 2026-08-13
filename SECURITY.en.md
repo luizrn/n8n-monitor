@@ -4,7 +4,7 @@
 
 ## Supported versions
 
-The project does not publish versioned releases yet. The `main` branch is the only supported version until the first stable tag is created.
+The project publishes version **2.0.0**. The `main` branch and that tag are the supported versions.
 
 ## Reporting a vulnerability
 
@@ -21,4 +21,4 @@ The maintainer will acknowledge the report within seven days. Accepted fixes wil
 
 ## Sensitive data
 
-Monitor accesses n8n keys, Uptime Kuma keys, and external delivery credentials. Never include these values, real configuration files, or unreviewed diagnostics in a public report.
+Monitor accesses n8n keys, Uptime Kuma keys, and external delivery credentials. Never include these values, the SQLite database, real configuration files, or unreviewed diagnostics in a public report.

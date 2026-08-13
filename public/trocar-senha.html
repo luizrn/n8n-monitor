@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trocar senha — Monitor n8n</title>
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/base.css">
+</head>
+<body>
+<main class="auth">
+  <form class="auth-caixa" id="form">
+    <h1>Trocar senha</h1>
+    <span class="versao" data-versao title="n8n-monitor"></span>
+    <p class="obs">É necessário definir uma senha nova no primeiro acesso.</p>
+    <label for="atual">Senha atual</label>
+    <input id="atual" type="password" autocomplete="current-password" required>
+    <label for="nova">Nova senha</label>
+    <input id="nova" type="password" autocomplete="new-password" minlength="6" required>
+    <div class="erro" id="erro" hidden></div>
+    <div class="linha-btn"><button type="submit">Salvar senha</button></div>
+  </form>
+</main>
+<script src="/i18n.js"></script>
+<script>
+document.getElementById('form').onsubmit=async ev=>{
+  ev.preventDefault()
+  const erro=document.getElementById('erro')
+  erro.hidden=true
+  const r=await fetch('/api/conta/senha',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({
+    atual:document.getElementById('atual').value,
+    nova:document.getElementById('nova').value
+  })})
+  const d=await r.json().catch(()=>({}))
+  if(!r.ok){erro.hidden=false;erro.textContent=d.message||d.erro||I18n.t('Não foi possível trocar a senha.');return}
+  location.href='/'
+}
+</script>
+</body>
+</html>

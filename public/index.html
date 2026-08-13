@@ -41,6 +41,8 @@ body{overflow:hidden}.app{width:98%;min-width:0;height:100vh;max-width:none;marg
     <div class="topo-acoes">
       <span id="status"><span class="ponto"></span><span id="statusNome">conectando</span></span>
       <span class="meta" id="quando"></span><button id="btPausa">Pausar</button><button id="btConfig">Configurações</button>
+      <span class="versao" data-versao title="n8n-monitor"></span>
+      <div class="sessao" id="sessao"></div>
     </div>
   </header>
   <div class="filtros-inst" id="fInst"></div>
@@ -56,7 +58,7 @@ body{overflow:hidden}.app{width:98%;min-width:0;height:100vh;max-width:none;marg
 </main>
 
 <dialog id="dlgConfig" aria-labelledby="tituloConfig"><div class="dlg config"><h3 id="tituloConfig">Configurações</h3><div class="obs" id="caminho"></div>
-  <div class="tabs" id="tabs"><button data-aba="geral" class="on">Geral</button><button data-aba="inst">Instâncias n8n</button><button data-aba="exec">Execuções</button><button data-aba="notif">Notificações</button><button data-aba="kuma">Uptime Kuma</button><button data-aba="webhook">Envio de alertas</button><a href="https://github.com/luizrn/n8n-monitor/tree/main/docs" target="_blank" rel="noopener noreferrer">Documentação</a></div>
+  <div class="tabs" id="tabs"><button data-aba="geral" class="on">Geral</button><button data-aba="inst">Instâncias n8n</button><button data-aba="exec">Execuções</button><button data-aba="notif">Notificações</button><button data-aba="kuma">Uptime Kuma</button><button data-aba="webhook">Envio de alertas</button><button data-aba="ws">Workspace</button><a href="https://github.com/luizrn/n8n-monitor/tree/main/docs/2.0" target="_blank" rel="noopener noreferrer">Documentação</a></div>
   <section class="aba" id="aba-geral"><label for="idioma">Idioma</label><select id="idioma"><option value="pt-BR">Português (Brasil)</option><option value="en">English</option></select><label for="tema">Tema</label><select id="tema"><option value="escuro">Escuro</option><option value="claro">Claro</option></select></section>
   <section class="aba" id="aba-inst" hidden><div id="instancias"></div><button id="btAddInst">Adicionar instância</button></section>
   <section class="aba" id="aba-exec" hidden>
@@ -90,6 +92,29 @@ body{overflow:hidden}.app{width:98%;min-width:0;height:100vh;max-width:none;marg
     <div class="destinos-lista" id="wDestinos"></div>
     <button id="btAddDestino">Adicionar destino</button>
   </section>
+  <section class="aba" id="aba-ws" hidden>
+    <h4 class="monitor-lista-titulo">Workspaces</h4>
+    <div class="obs">Cada workspace tem instâncias, tarefas e alertas isolados. Troque pelo seletor no topo.</div>
+    <div id="wsLista"></div>
+    <label for="wsNovo">Novo workspace</label>
+    <input id="wsNovo" placeholder="Nome do workspace">
+    <div class="acoes"><button id="btAddWs">Criar workspace</button><span class="obs" id="wsStatus"></span></div>
+    <h4 class="monitor-lista-titulo">Usuários deste workspace</h4>
+    <div class="membros" id="wsMembros"></div>
+    <label for="uNome">Nome</label><input id="uNome">
+    <label for="uEmail">E-mail</label><input id="uEmail" type="email">
+    <label for="uSenha">Senha</label><input id="uSenha" type="password" autocomplete="new-password">
+    <label for="uPapel">Papel</label>
+    <select id="uPapel"><option value="member">Membro</option><option value="admin">Admin</option></select>
+    <label class="linha-check"><input id="uTroca" type="checkbox" checked> Trocar senha no primeiro login</label>
+    <div class="acoes"><button id="btAddUser">Cadastrar usuário</button><span class="obs" id="uStatus"></span></div>
+    <h4 class="monitor-lista-titulo">Convidar</h4>
+    <label for="cEmail">E-mail</label><input id="cEmail" type="email">
+    <label for="cPapel">Papel</label>
+    <select id="cPapel"><option value="member">Membro</option><option value="admin">Admin</option></select>
+    <div class="acoes"><button id="btConvite">Gerar convite</button></div>
+    <div class="obs convite-link" id="cLink"></div>
+  </section>
   <div class="linha-btn"><span class="obs cresce" id="salvarStatus"></span><button id="btFecharConfig">Fechar</button><button id="btSalvar">Salvar</button></div>
 </div></dialog>
 
@@ -98,6 +123,7 @@ body{overflow:hidden}.app{width:98%;min-width:0;height:100vh;max-width:none;marg
 
 <script src="/i18n.js"></script>
 <script src="/toasts.js"></script>
+<script src="/sessao.js"></script>
 <script>
 const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
 const tr=(s,v)=>I18n.t(s,v)
@@ -175,5 +201,35 @@ $('#btSalvar').onclick=async()=>{
 $('#btConfig').onclick=abrirConfig;$('#btFecharConfig').onclick=()=>$('#dlgConfig').close();$('#btN8nDetalhes').onclick=()=>location.href='/logs';$('#btUptime').onclick=()=>$('#dlgUptime').showModal();$('#btCron').onclick=()=>$('#dlgCron').showModal();$('#btPausa').onclick=ev=>{pausado=!pausado;ev.target.textContent=pausado?'Retomar':'Pausar';if(!pausado)puxar()}
 setInterval(()=>document.querySelectorAll('[data-inicio]').forEach(e=>e.textContent=dur((Date.now()-new Date(e.dataset.inicio))/60000)),1000)
 fetch('/api/config').then(r=>r.json()).then(c=>Toaster.configurar(c.notificacoes));puxar();setInterval(puxar,10000)
+Sessao.carregar().then(s=>Sessao.montar($('#sessao'),s))
+async function carregarWorkspace(){
+  const[s,u]=await Promise.all([Sessao.carregar(),fetch('/api/usuarios').then(r=>r.ok?r.json():{itens:[]}).catch(()=>({itens:[]}))])
+  $('#wsLista').innerHTML=(s.workspaces||[]).map(w=>`<div class="membro"><b>${esc(w.name)}</b><span class="tag">${esc(tr(w.role))}</span>${w.id===s.ativo?'<span class="tag on">'+esc(tr('atual'))+'</span>':''}</div>`).join('')
+  $('#wsMembros').innerHTML=(u.itens||[]).map(m=>`<div class="membro"><div><b>${esc(m.nome)}</b><div class="sub2">${esc(m.email)}</div></div><span class="tag">${esc(tr(m.papel))}</span>${m.mustChangePassword?'<span class="tag atencao">'+esc(tr('trocar senha'))+'</span>':''}</div>`).join('')||'<div class="obs">'+esc(tr('Nenhum usuário listado.'))+'</div>'
+}
+$('#btConfig').onclick=async()=>{await abrirConfig();await carregarWorkspace()}
+$('#btAddWs').onclick=async()=>{
+  const nome=$('#wsNovo').value.trim();if(!nome)return
+  $('#wsStatus').textContent=tr('criando…')
+  const r=await fetch('/api/workspace',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({nome})})
+  const d=await r.json().catch(()=>({}))
+  $('#wsStatus').textContent=r.ok?tr('Workspace criado. Recarregando…'):(d.erro||tr('falhou'))
+  if(r.ok)location.reload()
+}
+$('#btAddUser').onclick=async()=>{
+  $('#uStatus').textContent=tr('salvando…')
+  const r=await fetch('/api/usuarios',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({nome:$('#uNome').value,email:$('#uEmail').value,senha:$('#uSenha').value,papel:$('#uPapel').value,mustChangePassword:$('#uTroca').checked})})
+  const d=await r.json().catch(()=>({}))
+  $('#uStatus').textContent=r.ok?tr('Usuário cadastrado.'):(d.erro||d.message||tr('falhou'))
+  if(r.ok){ $('#uNome').value='';$('#uEmail').value='';$('#uSenha').value='';await carregarWorkspace() }
+}
+$('#btConvite').onclick=async()=>{
+  const r=await fetch('/api/convite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:$('#cEmail').value,papel:$('#cPapel').value})})
+  const d=await r.json().catch(()=>({}))
+  if(!r.ok){$('#cLink').textContent=d.erro||d.message||tr('falhou');return}
+  const link=location.origin+(d.link||'')
+  $('#cLink').textContent=link
+  try{await navigator.clipboard.writeText(link);$('#cLink').textContent=tr('{link} (copiado)',{link})}catch{}
+}
 </script>
 </body></html>

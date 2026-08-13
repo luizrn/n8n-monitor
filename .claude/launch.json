@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "n8n-monitor",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["server.mjs"],
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsx", "src/server.ts"],
       "port": 8787
     }
   ]

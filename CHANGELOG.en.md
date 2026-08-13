@@ -2,9 +2,11 @@
 
 > **Portuguese version:** [Changelog](CHANGELOG.md)
 
-All notable changes will be recorded here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and will adopt semantic versioning with its first tag.
+All notable changes will be recorded here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and semantic versioning. The first stable tag is **2.0.0**.
 
 ## Unreleased
+
+## [2.0.0] — 2026-08-13
 
 ### Added
 
@@ -19,6 +21,9 @@ All notable changes will be recorded here. The project follows [Keep a Changelog
 - Docker, Compose, and local automated tests;
 - documentation and community files for the open source project.
 - persistent selection between the default dark theme and a soft light theme.
+- login with Better Auth (email/password), isolated workspaces, internal signup, and copyable invites;
+- TypeScript server, SQLite in `n8n-monitor.sqlite`, and per-workspace collection;
+- version guide in [`docs/2.0/`](docs/2.0/README.en.md) and a `v2.0.0` badge in the UI.
 
 ### Changed
 
@@ -27,9 +32,12 @@ All notable changes will be recorded here. The project follows [Keep a Changelog
 - scrollbars aligned with light and dark themes;
 - hardened Docker Compose with a read-only filesystem and minimal privileges.
 - Settings saving decoupled from full collection, preventing the button from remaining stuck on “Saving...”.
+- the dashboard requires a session; `GET /api/health` stays public and returns `versao`;
+- persistence moved from JSON files to SQLite keyed by `organization_id`.
 
 ### Security
 
+- public signup disabled; session stored in an httpOnly cookie;
 - secret redaction in diagnostic URLs, messages, and stacks;
 - HTTP/HTTPS validation, reserved-header blocking, and prototype-pollution protection;
 - JSON-only write APIs with body limits, origin checks, and internal-detail-free errors;

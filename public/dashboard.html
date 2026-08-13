@@ -41,6 +41,8 @@
     </nav>
     <span id="status"><span class="ponto"></span><span id="statusNome">carregando</span></span>
     <span class="cresce"></span>
+    <span class="versao" data-versao title="n8n-monitor"></span>
+    <div class="sessao" id="sessao"></div>
     <div class="grupo" id="fInst"></div>
     <div class="grupo" id="periodo"></div>
     <button id="btCopiar">Copiar resumo</button>
@@ -81,6 +83,7 @@
 </div>
 
 <script src="/i18n.js"></script>
+<script src="/sessao.js"></script>
 <script>
 const $ = s => document.querySelector(s)
 const tr = (s,v) => I18n.t(s,v)
@@ -229,6 +232,7 @@ $('#btCopiar').onclick = async ev => {
 
 addEventListener('resize', ()=>{ if(ultimo) grafico(ultimo.serie) })
 periodos(); puxar(); setInterval(puxar, 30000)
+Sessao.carregar().then(s=>Sessao.montar(document.getElementById('sessao'),s))
 </script>
 </body>
 </html>
