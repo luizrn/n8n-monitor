@@ -1,8 +1,8 @@
-import { listarOrganizationIds } from './db.js'
+import { lerJsonWorkspace, listarOrganizationIds } from './db.js'
 import { instanciasAtivas } from './config.js'
 import {
   carregarConfigOrg, carregarReconhecimentosOrg, gravarTarefasOrg, gravarWebhookOrg,
-  lerTarefasOrg, lerWebhookOrg, salvarConfigOrg, salvarReconhecimentosOrg, semearInstanciaAmbiente,
+  lerTarefasOrg, lerWebhookOrg, salvarConfigOrg, salvarReconhecimentosOrg,
 } from './persistencia.js'
 import { criarRepo } from './tarefas.js'
 import { criarDispatcherWebhook } from './webhook.js'
@@ -53,8 +53,7 @@ export async function prepararRuntime(orgId: string) {
   const rt = runtimeDe(orgId)
   await rt.repoTarefas.carregar()
   await rt.webhook.carregar()
-  rt.config = await semearInstanciaAmbiente(rt.config)
-  salvarConfigOrg(orgId, rt.config)
+  if (!lerJsonWorkspace('workspace_config', orgId)) salvarConfigOrg(orgId, rt.config)
   return rt
 }
 

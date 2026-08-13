@@ -80,6 +80,10 @@ export function legadoJaImportado(organizationId: string) {
   return Boolean(db.prepare('SELECT 1 FROM legado_importado WHERE organization_id = ?').get(organizationId))
 }
 
+export function legadoJaImportadoEmAlgum() {
+  return Boolean(db.prepare('SELECT 1 FROM legado_importado LIMIT 1').get())
+}
+
 export function marcarLegadoImportado(organizationId: string) {
   db.prepare('INSERT OR REPLACE INTO legado_importado (organization_id, em) VALUES (?, ?)').run(organizationId, agoraIso())
 }

@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import {
   ARQ_CONFIG_LEGADO, ARQ_RECON_LEGADO, ARQ_TAREFAS_LEGADO, ARQ_WEBHOOK_LEGADO,
-  gravarJsonWorkspace, legadoJaImportado, lerJsonWorkspace, marcarLegadoImportado,
+  gravarJsonWorkspace, legadoJaImportado, legadoJaImportadoEmAlgum, lerJsonWorkspace, marcarLegadoImportado,
 } from './db.js'
-import { migrar, PADRAO } from './config.js'
+import { migrar } from './config.js'
 import { registroSeguro } from './seguranca.js'
 import type { Config, Reconhecimento } from './tipos.js'
 
@@ -62,10 +62,14 @@ export function gravarWebhookOrg(organizationId: string, json: string) {
 
 export async function importarLegadoSeHouver(organizationId: string) {
   if (legadoJaImportado(organizationId)) return false
+  if (legadoJaImportadoEmAlgum()) {
+    if (!lerJsonWorkspace('workspace_config', organizationId)) salvarConfigOrg(organizationId, migrar({}))
+    return false
+  }
   const jaTem = Boolean(lerJsonWorkspace('workspace_config', organizationId))
   const configTxt = await lerArquivo(ARQ_CONFIG_LEGADO)
   if (!configTxt && !jaTem) {
-    salvarConfigOrg(organizationId, PADRAO)
+    salvarConfigOrg(organizationId, await semearInstanciaAmbiente(migrar({})))
     marcarLegadoImportado(organizationId)
     return false
   }
@@ -75,12 +79,12 @@ export async function importarLegadoSeHouver(organizationId: string) {
   }
   if (configTxt) {
     try {
-      salvarConfigOrg(organizationId, migrar(JSON.parse(configTxt) as Record<string, unknown>))
+      salvarConfigOrg(organizationId, await semearInstanciaAmbiente(migrar(JSON.parse(configTxt) as Record<string, unknown>)))
     } catch {
-      salvarConfigOrg(organizationId, PADRAO)
+      salvarConfigOrg(organizationId, migrar({}))
     }
   } else {
-    salvarConfigOrg(organizationId, PADRAO)
+    salvarConfigOrg(organizationId, migrar({}))
   }
   const recon = await lerArquivo(ARQ_RECON_LEGADO)
   if (recon) gravarJsonWorkspace('workspace_reconhecimentos', organizationId, recon)
