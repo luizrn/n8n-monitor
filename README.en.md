@@ -3,7 +3,7 @@
 > **Portuguese version:** [Read the project README in Portuguese.](README.md)
 
 [![MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Node 20+](https://img.shields.io/badge/node-20%2B-339933.svg)](https://nodejs.org/)
+[![Node 22+](https://img.shields.io/badge/node-22.5%2B-339933.svg)](https://nodejs.org/)
 
 <img width="1621" height="760" alt="Unified n8n and Uptime Kuma monitor" src="https://github.com/user-attachments/assets/c7f639e0-6f10-44f6-8da6-00cf63a49c07" />
 
@@ -11,7 +11,7 @@
 
 The project brings automation health and service availability into one interface. For n8n, it detects errors, stuck executions, and missed schedules across multiple instances. For Uptime Kuma, it tracks online and offline monitors, maintenance, response time, uptime, TLS certificates, and domain expiration. Incidents from both sources appear in the same Monitor and can be handled through a Tasks queue.
 
-Built with plain Node.js, with no npm dependencies, framework, or build step.
+TypeScript Node.js server, SQLite, and Better Auth. Version **2.0.0**. HTML pages with no frontend bundler.
 
 ## Features
 
@@ -31,7 +31,7 @@ Built with plain Node.js, with no npm dependencies, framework, or build step.
 | 🟢 | Uptime Kuma | Displays status, response time, uptime, maintenance, paused state, and selectable monitors. |
 | 🔐 | TLS | Warns about certificates that are close to expiration, expired, or invalid. |
 | 🌐 | Domains | Checks domain expiration through RDAP and ignores TLDs without a reliable source. |
-| 🐳 | Docker | Non-root image, health check, persistent volume, read-only filesystem, and Compose bound to loopback. |
+| 🔐 | Login and workspaces | Email/password, internal signup, invites, and per-workspace isolation. |
 | 🧪 | Automated tests | `node:test`, server smoke tests, and local syntax checks. |
 | 🌍 | Bilingual interface | Brazilian Portuguese and English across Monitor, Settings, Tasks, Dashboard, Logs, dialogs, and notifications. |
 | 🌓 | Themes | Default dark theme and a soft light theme, persisted and applied across every screen. |
@@ -43,10 +43,12 @@ Built with plain Node.js, with no npm dependencies, framework, or build step.
 ```bash
 git clone https://github.com/luizrn/n8n-monitor.git
 cd n8n-monitor
+npm install
+npm run build
 npm start
 ```
 
-Open `http://127.0.0.1:8787`, go to **Settings**, add your n8n instances, and connect Uptime Kuma with its URL and API key.
+Open `http://127.0.0.1:8787`, create the first user on setup, go to **Settings**, add your n8n instances, and connect Uptime Kuma with its URL and API key.
 
 ### Docker Compose
 
@@ -55,7 +57,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-Compose publishes only `127.0.0.1:8787` and keeps configuration, tasks, and state in the `n8n-monitor-data` volume.
+Compose publishes only `127.0.0.1:8787` and keeps SQLite, configuration, tasks, and state in the `n8n-monitor-data` volume. Create the administrator on first access. Set `BETTER_AUTH_SECRET` (32+ characters) and `BETTER_AUTH_URL` in production.
 
 ```bash
 docker compose logs -f monitor
@@ -63,17 +65,18 @@ docker compose down                 # preserves the volume
 docker compose down --volumes       # also removes persisted data
 ```
 
-Do not expose the dashboard directly to the internet. It is an administrative tool without built-in authentication. Use a VPN or authenticated proxy when remote access is required.
+The dashboard requires login. Prefer a VPN or proxy for remote access.
 
 ## Configuration
 
-The Monitor contains five settings tabs:
+The Monitor contains these settings tabs:
 
 - **General:** interface language and light or dark theme, persisted across every screen.
 - **n8n Instances:** name, URL, API key, activation, and individual connection test.
 - **Notifications:** toast duration from 0 to 600 seconds, browser notifications, sound, and volume.
 - **Uptime Kuma:** URL, API key, optional public-page slug, expiration warning threshold, and monitor selection.
-- **Alert delivery:** a list of HTTP Webhook, WhatsApp/Evolution API, and Discord destinations, each with its own name, activation switch, credentials, test action, and latest result. Multiple destinations can run simultaneously. HTTP mode supports `POST`, `PUT`, or `PATCH`, Bearer authentication, and one optional custom header.
+- **Alert delivery:** a list of HTTP Webhook, WhatsApp/Evolution API, and Discord destinations.
+- **Workspace:** create workspaces, register users (name, email, password, change-on-first-login) and copy invite links.
 
 The **Alert delivery** tab starts empty and creates a form only after **Add destination** is selected. The **Documentation** shortcut opens the project's public GitHub guides.
 
@@ -85,16 +88,20 @@ Available environment variables:
 |---|---|---|
 | `HOST` | `127.0.0.1` | Server network interface. |
 | `PORT` | `8787` | HTTP port. |
-| `N8N_MONITOR_DATA_DIR` | user directory | Location of persisted files. |
+| `N8N_MONITOR_DATA_DIR` | user directory | Location of SQLite and persisted files. |
+| `BETTER_AUTH_SECRET` | generated in development | Session secret (required in production, 32+ characters). |
+| `BETTER_AUTH_URL` | inferred from the request | Public dashboard URL, e.g. `https://monitor.example.com`. |
 | `N8N_BASE_URL` | `http://localhost:5678` | Seeds the first instance. |
 | `N8N_API_KEY` | empty | Seeds the first instance API key. |
 
-Data is stored in `%LOCALAPPDATA%\n8n-monitor` on Windows, `$HOME/n8n-monitor` on other systems, or the directory selected through the environment variable. Sensitive files use `0600` permissions.
+Data is stored in `%LOCALAPPDATA%\n8n-monitor` on Windows, `$HOME/n8n-monitor` on other systems, or the directory selected through the environment variable. The database is `n8n-monitor.sqlite`.
 
 ## Routes
 
 | Route | Screen |
 |---|---|
+| `/login` | Sign in |
+| `/setup` | First user and workspace |
 | `/` | Monitor and Settings |
 | `/tarefas` | Task List and Kanban |
 | `/dashboard` | Historical metrics |
@@ -110,8 +117,13 @@ Each external destination maintains its own state machine and receives `opened`,
 ## Development
 
 ```bash
-npm test
+npm test                 # all suites
+npm run test:unit        # no HTTP
+npm run test:server      # login, workspaces, APIs
+npm run test:html        # pages + i18n
+npm run test:docs        # pt/en pairs
 npm run check
+npm run build            # fast tests + tsc
 npm start
 ```
 
@@ -119,6 +131,8 @@ See [CONTRIBUTING.en.md](CONTRIBUTING.en.md), [SECURITY.en.md](SECURITY.en.md), 
 
 ## Documentation
 
+- [2.0.0 guide](docs/2.0/README.en.md): login, workspaces, SQLite, TypeScript, and example environment variables.
+- [AGENTS.en.md](AGENTS.en.md): rules for anyone changing the code.
 - [Architecture](docs/architecture.en.md): components, data, APIs, and payloads.
 - [Decisions](docs/decisions.en.md): reliability and anti-spam criteria.
 - [Operations](docs/operations.en.md): installation, security, and troubleshooting.

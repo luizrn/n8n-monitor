@@ -3,7 +3,7 @@
 > **English version:** [Read the project README in English.](README.en.md)
 
 [![MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Node 20+](https://img.shields.io/badge/node-20%2B-339933.svg)](https://nodejs.org/)
+[![Node 22+](https://img.shields.io/badge/node-22.5%2B-339933.svg)](https://nodejs.org/)
 <img width="1902" height="909" alt="image" src="https://github.com/user-attachments/assets/8d1e59fd-54e7-403b-a248-81fa63ee8441" />
 <img width="1896" height="859" alt="image" src="https://github.com/user-attachments/assets/40069a6b-ef2a-4ff4-9a1b-e2b1ba51e54a" />
 <img width="1895" height="909" alt="image" src="https://github.com/user-attachments/assets/7175d343-5360-4abb-a34f-8fe6a446b5f7" />
@@ -18,7 +18,7 @@
 
 O projeto reúne em uma única interface a saúde das automações e a disponibilidade dos serviços. No n8n, detecta erros, execuções travadas e agendamentos perdidos em múltiplas instâncias. No Uptime Kuma, acompanha monitores online e offline, manutenção, tempo de resposta, uptime, certificados TLS e expiração de domínios. Os incidentes das duas fontes aparecem no mesmo Monitor e podem ser tratados em uma fila de Tarefas.
 
-Node.js puro, sem dependências npm, framework ou etapa de build.
+Servidor TypeScript em Node.js, SQLite e Better Auth. Versão **2.0.0**. Páginas HTML sem bundler de frontend.
 
 ## Funcionalidades
 
@@ -38,7 +38,7 @@ Node.js puro, sem dependências npm, framework ou etapa de build.
 | 🟢 | Uptime Kuma | Exibe status, resposta, uptime, manutenção, pausa e monitores selecionáveis. |
 | 🔐 | TLS | Avisa certificado próximo do vencimento, expirado ou inválido. |
 | 🌐 | Domínios | Consulta expiração por RDAP e ignora TLDs sem fonte confiável. |
-| 🐳 | Docker | Imagem não-root, health check, volume persistente, filesystem somente leitura e Compose preso ao loopback. |
+| 🔐 | Login e workspaces | E-mail e senha, cadastro interno, convites e isolamento por workspace. |
 | 🧪 | Testes automatizados | `node:test`, smoke test do servidor e verificações de sintaxe executadas localmente. |
 | 🌍 | Interface bilíngue | Português (Brasil) e inglês em Monitor, Configurações, Tarefas, Dashboard, Logs, modais e notificações. |
 | 🌓 | Temas | Tema escuro padrão e tema claro suave, persistidos e aplicados em todas as telas. |
@@ -50,10 +50,12 @@ Node.js puro, sem dependências npm, framework ou etapa de build.
 ```bash
 git clone https://github.com/luizrn/n8n-monitor.git
 cd n8n-monitor
+npm install
+npm run build
 npm start
 ```
 
-Abra `http://127.0.0.1:8787`, entre em **Configurações**, adicione suas instâncias n8n e conecte o Uptime Kuma pela URL e API key.
+Abra `http://127.0.0.1:8787`, crie o primeiro usuário no setup, entre em **Configurações**, adicione suas instâncias n8n e conecte o Uptime Kuma pela URL e API key.
 
 ### Docker Compose
 
@@ -62,7 +64,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-O Compose publica somente `127.0.0.1:8787` e mantém configuração, tarefas e estado no volume `n8n-monitor-data`.
+O Compose publica somente `127.0.0.1:8787` e mantém SQLite, configuração, tarefas e estado no volume `n8n-monitor-data`. No primeiro acesso, crie o administrador. Defina `BETTER_AUTH_SECRET` (32+ caracteres) e `BETTER_AUTH_URL` em produção.
 
 ```bash
 docker compose logs -f monitor
@@ -70,17 +72,18 @@ docker compose down                 # preserva o volume
 docker compose down --volumes       # remove também os dados persistidos
 ```
 
-Não exponha o painel diretamente à internet: ele é uma ferramenta administrativa sem autenticação própria. Use VPN ou proxy autenticado quando precisar de acesso remoto.
+O painel exige login. Ainda assim, prefira VPN ou proxy quando o acesso for remoto.
 
 ## Configuração
 
-As cinco abas ficam no Monitor:
+As abas ficam no Monitor:
 
 - **Geral:** idioma da interface e tema claro ou escuro, persistidos para todas as telas.
 - **Instâncias n8n:** nome, URL, API key, ativação e teste individual.
 - **Notificações:** duração do toast de 0 a 600 segundos, navegador, som e volume.
 - **Uptime Kuma:** URL, API key, slug público opcional, antecedência e seleção de monitores.
-- **Envio de alertas:** lista de destinos Webhook HTTP, WhatsApp/Evolution API e Discord, cada um com nome, ativação, credenciais, teste e último resultado próprios. Vários destinos podem operar simultaneamente. O modo HTTP aceita `POST`, `PUT` ou `PATCH`, Bearer e um header adicional opcional.
+- **Envio de alertas:** lista de destinos Webhook HTTP, WhatsApp/Evolution API e Discord.
+- **Workspace:** criar workspaces, cadastrar usuários (nome, e-mail, senha, troca no primeiro login) e gerar convite copiável.
 
 A aba **Envio de alertas** começa vazia e só cria um formulário ao clicar em **Adicionar destino**. O atalho **Documentação** abre os guias públicos do projeto no GitHub.
 
@@ -92,16 +95,20 @@ Variáveis disponíveis:
 |---|---|---|
 | `HOST` | `127.0.0.1` | Interface de rede do servidor. |
 | `PORT` | `8787` | Porta HTTP. |
-| `N8N_MONITOR_DATA_DIR` | diretório do usuário | Local dos arquivos persistidos. |
+| `N8N_MONITOR_DATA_DIR` | diretório do usuário | Local do SQLite e arquivos persistidos. |
+| `BETTER_AUTH_SECRET` | gerado em desenvolvimento | Segredo de sessão (obrigatório em produção, 32+ caracteres). |
+| `BETTER_AUTH_URL` | inferido do pedido | URL pública do painel, ex. `https://monitor.exemplo.com`. |
 | `N8N_BASE_URL` | `http://localhost:5678` | Semeia a primeira instância. |
 | `N8N_API_KEY` | vazio | Semeia a chave da primeira instância. |
 
-Dados ficam em `%LOCALAPPDATA%\n8n-monitor` no Windows, `$HOME/n8n-monitor` em outros sistemas ou no diretório definido pela variável. Arquivos sensíveis usam permissão `0600`.
+Dados ficam em `%LOCALAPPDATA%\n8n-monitor` no Windows, `$HOME/n8n-monitor` em outros sistemas ou no diretório definido pela variável. O banco é `n8n-monitor.sqlite`.
 
 ## Rotas
 
 | Rota | Tela |
 |---|---|
+| `/login` | Entrar |
+| `/setup` | Primeiro usuário e workspace |
 | `/` | Monitor e Configurações |
 | `/tarefas` | Lista e Kanban de pendências |
 | `/dashboard` | Métricas históricas |
@@ -117,8 +124,13 @@ Cada destino externo mantém uma máquina de estados própria e recebe `opened`,
 ## Desenvolvimento
 
 ```bash
-npm test
+npm test                 # todas as suítes
+npm run test:unit        # sem HTTP
+npm run test:server      # login, workspaces, APIs
+npm run test:html        # páginas + i18n
+npm run test:docs        # pares pt/en
 npm run check
+npm run build            # testes rápidos + tsc
 npm start
 ```
 
@@ -126,6 +138,8 @@ Veja [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) e [CHANGELOG
 
 ## Documentação
 
+- [Guia 2.0.0](docs/2.0/README.md): login, workspaces, SQLite, TypeScript e variáveis de exemplo.
+- [AGENTS.md](AGENTS.md): regras para quem altera o código.
 - [Arquitetura](docs/arquitetura.md): componentes, dados, APIs e payloads.
 - [Decisões](docs/decisoes.md): critérios de confiabilidade e anti-spam.
 - [Operação](docs/operacao.md): instalação, segurança e troubleshooting.

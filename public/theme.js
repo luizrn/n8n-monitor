@@ -15,6 +15,15 @@
   window.Theme = { definir: aplicar, atual: () => tema }
 
   addEventListener('DOMContentLoaded', () => {
+    fetch('/api/health', { cache: 'no-store' })
+      .then((resposta) => resposta.json())
+      .then((saude) => {
+        if (!saude?.versao) return
+        document.querySelectorAll('[data-versao]').forEach((el) => {
+          el.textContent = `v${saude.versao}`
+        })
+      })
+      .catch(() => {})
     fetch('/api/config', { cache: 'no-store' })
       .then((resposta) => resposta.json())
       .then((config) => aplicar(config.tema))

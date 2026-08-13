@@ -7,8 +7,12 @@
 Direct:
 
 ```bash
+npm install
+npm run build
 npm start
 ```
+
+On first access, open `/setup` and create the administrator and initial workspace. In production, set `BETTER_AUTH_SECRET` (32+ characters) and `BETTER_AUTH_URL`.
 
 Docker:
 
@@ -52,11 +56,11 @@ Audio requires a user gesture. Select **Test** after opening Settings. Sound pla
 
 ## Language
 
-In **Settings > General**, select **Portuguese (Brazil)** or **English**. The value is persisted in `config.json`, returned by `GET /api/config`, and applied to Monitor, Settings, Tasks, Dashboard, Logs, dialogs, toasts, and system notifications. Dates and numbers use the matching locale. The preference is mirrored in `localStorage` to prevent a language flash during navigation.
+In **Settings > General**, select **Portuguese (Brazil)** or **English**. The value is persisted in the workspace SQLite database, returned by `GET /api/config`, and applied to Monitor, Settings, Tasks, Dashboard, Logs, dialogs, toasts, and system notifications. Dates and numbers use the matching locale. The preference is mirrored in `localStorage` to prevent a language flash during navigation.
 
 ## Theme
 
-In **Settings > General**, choose **Dark** or **Light**. Dark is the default and preserves the original visual identity; Light uses a low-glare cool gray surface. The value is persisted in `config.json` and mirrored in `localStorage`. `public/theme.js` applies it before CSS across Monitor, Tasks, Dashboard, and Logs.
+In **Settings > General**, choose **Dark** or **Light**. Dark is the default and preserves the original visual identity; Light uses a low-glare cool gray surface. The value is persisted in the workspace SQLite database and mirrored in `localStorage`. `public/theme.js` applies it before CSS across Monitor, Tasks, Dashboard, and Logs.
 
 ## External channels
 
@@ -88,8 +92,8 @@ The backup contains secrets. Encrypt it and restrict access.
 ```bash
 npm run check
 npm test
-node scripts/diag-exec.mjs ID
-node scripts/dump-wf.mjs WORKFLOW_ID
+npm run diag -- ID
+npm run dump -- WORKFLOW_ID
 ```
 
 On Windows, the scripts use `N8N_API_KEY` from the environment or user registry. On Linux/macOS, export `N8N_API_KEY` and, when needed, `N8N_BASE_URL`. Their output applies the same automatic secret redaction as the dashboard.
@@ -103,12 +107,18 @@ On Windows, the scripts use `N8N_API_KEY` from the environment or user registry.
 | repeated webhook | write permission on the data directory |
 | Kuma without uptime | unavailable metric and missing public slug |
 
+## Login and workspaces
+
+The dashboard blocks Monitor, Tasks, Dashboard, Logs, and the APIs without a session. `GET /api/health` stays public for the Coolify health check.
+
+Public signup is disabled. The first user is created at `/setup`. Afterwards, in **Settings > Workspace**, an admin creates workspaces, registers users (optionally requiring a password change on first login), or generates a copyable invite link.
+
 ## Security
 
-- Do not publish the port without external authentication.
+- The dashboard requires login; still prefer a VPN or proxy for remote access.
 - Write endpoints only accept `Content-Type: application/json`, limit bodies to 1 MB, and reject browser origins that differ from the dashboard host.
 - Configured URLs must use HTTP/HTTPS and cannot include embedded credentials. HTTP destinations cannot override reserved headers.
-- Configuration, tasks, acknowledgements, and deduplication are written atomically with `0600` permissions. The API does not disclose the host path.
+- Configuration, tasks, acknowledgements, and deduplication live in SQLite per workspace. The API does not disclose the host path.
 - A task or acknowledgement is cleared only after its source responds and confirms the alert disappeared. n8n or Kuma unavailability is not recovery.
 - HTTP and Discord webhook URLs, tokens, and keys are never returned by `GET /api/config`; an empty secret field preserves its saved value.
 - Do not mount the data directory inside the repository.

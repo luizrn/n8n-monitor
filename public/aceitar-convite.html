@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Convite — Monitor n8n</title>
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/base.css">
+</head>
+<body>
+<main class="auth">
+  <form class="auth-caixa" id="form">
+    <h1>Aceitar convite</h1>
+    <span class="versao" data-versao title="n8n-monitor"></span>
+    <p class="obs" id="info">Carregando convite…</p>
+    <label for="nome">Nome</label>
+    <input id="nome" required>
+    <label for="email">E-mail</label>
+    <input id="email" type="email" readonly>
+    <label for="senha">Senha</label>
+    <input id="senha" type="password" autocomplete="new-password" minlength="6" required>
+    <div class="erro" id="erro" hidden></div>
+    <div class="linha-btn"><button type="submit">Entrar no workspace</button></div>
+  </form>
+</main>
+<script src="/i18n.js"></script>
+<script>
+const id=new URLSearchParams(location.search).get('id')||''
+const erro=document.getElementById('erro')
+fetch('/api/convite/info?id='+encodeURIComponent(id)).then(async r=>{
+  const d=await r.json().catch(()=>({}))
+  if(!r.ok){document.getElementById('info').textContent=d.erro||I18n.t('Convite inválido.');document.getElementById('form').querySelector('button').disabled=true;return}
+  document.getElementById('info').textContent=I18n.t('Você foi convidado para {workspace} como {role}.',{workspace:d.workspace,role:d.role})
+  document.getElementById('email').value=d.email
+}).catch(()=>{document.getElementById('info').textContent=I18n.t('Não foi possível carregar o convite.')})
+document.getElementById('form').onsubmit=async ev=>{
+  ev.preventDefault();erro.hidden=true
+  const r=await fetch('/api/convite/aceitar',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({
+    id, nome:document.getElementById('nome').value, senha:document.getElementById('senha').value
+  })})
+  const d=await r.json().catch(()=>({}))
+  if(!r.ok){erro.hidden=false;erro.textContent=d.erro||I18n.t('Não foi possível aceitar.');return}
+  location.href='/'
+}
+</script>
+</body>
+</html>

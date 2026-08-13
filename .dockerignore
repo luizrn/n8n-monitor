@@ -2,7 +2,6 @@
 .github
 .claude
 node_modules
-test
 docs
 *.code-workspace
 *.dump.json
@@ -11,3 +10,12 @@ docs
 .env.*
 config.json
 *.local.json
+dist
+*.code-workspace
+*.dump.json
+*.exec.json
+.env
+.env.*
+config.json
+*.local.json
+dist

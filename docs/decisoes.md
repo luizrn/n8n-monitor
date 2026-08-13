@@ -39,15 +39,19 @@ Campos de senha vazios significam “manter”. Diagnósticos percorrem objetos 
 
 ## Kuma por interfaces públicas
 
-O projeto permanece sem dependências. A integração usa Prometheus com API key e páginas de status públicas para fallback. Socket.IO interno não é consumido porque é acoplado à implementação e exigiria biblioteca externa.
+A integração Kuma usa Prometheus com API key e páginas de status públicas para fallback. Socket.IO interno não é consumido porque é acoplado à implementação e exigiria outra biblioteca. A dependência de runtime intencional é o Better Auth.
 
 ## Domínio somente com RDAP verificável
 
 O resolvedor usa o bootstrap DNS da IANA e tenta o hostname do monitor até encontrar o domínio registrado. Resultado é armazenado por 24h. Falta de endpoint ou data de expiração é desconhecida, não falha.
 
+## Login e isolamento por workspace
+
+Cada tela administrativa exige sessão. Better Auth cobre e-mail/senha, organizations como workspaces e o plugin admin para cadastro interno. Signup público fica desligado; o primeiro usuário nasce em `/setup`. Configuração, tarefas e o coletor são chaveados por `organization_id`.
+
 ## Docker não implica exposição pública
 
-O processo escuta `0.0.0.0` dentro do container para permitir o mapeamento, mas o Compose publica em `127.0.0.1`. O painel não implementa login e deve ficar atrás de VPN ou proxy autenticado.
+O processo escuta `0.0.0.0` dentro do container para permitir o mapeamento, mas o Compose publica em `127.0.0.1`. O painel exige login (Better Auth, workspaces isolados); ainda assim, prefira VPN ou proxy quando o acesso for remoto.
 
 ## Limite de execução travada é por fluxo, não único
 

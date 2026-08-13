@@ -1,21 +1,37 @@
 {
   "name": "n8n-monitor",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Painel open source de monitoramento para n8n e Uptime Kuma, com alertas, tarefas e integrações de entrega",
   "author": "Luiz Fernando Riva Nekel",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.5"
   },
   "scripts": {
-    "start": "node server.mjs",
-    "test": "node --test",
-    "check": "node --check server.mjs && node --check cron.mjs && node --check instancias.mjs && node --check tarefas.mjs && node --check uptime.mjs && node --check alertas.mjs && node --check rdap.mjs && node --check webhook.mjs && node --check seguranca.mjs && node --check scripts/diag-exec.mjs && node --check scripts/dump-wf.mjs && node --check public/theme.js && node --check public/i18n.js && node --check public/toasts.js",
-    "diag": "node scripts/diag-exec.mjs",
-    "dump": "node scripts/dump-wf.mjs"
+    "compile": "tsc",
+    "prebuild": "npm run test:unit && npm run test:html && npm run test:docs",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx src/server.ts",
+    "test": "tsx --test --test-concurrency=1 test/**/*.test.ts",
+    "test:unit": "tsx --test test/alertas.test.ts test/rdap.test.ts test/seguranca.test.ts test/tarefas.test.ts test/uptime.test.ts test/webhook.test.ts",
+    "test:server": "tsx --test --test-concurrency=1 test/server.test.ts",
+    "test:html": "tsx --test test/html.test.ts test/i18n.test.ts",
+    "test:docs": "tsx --test test/docs.test.ts",
+    "test:file": "tsx --test",
+    "check": "tsc --noEmit",
+    "diag": "tsx scripts/diag-exec.ts",
+    "dump": "tsx scripts/dump-wf.ts"
   },
-  "dependencies": {},
+  "dependencies": {
+    "better-auth": "^1.3.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  },
   "license": "MIT",
   "repository": { "type": "git", "url": "git+https://github.com/luizrn/n8n-monitor.git" },
   "bugs": { "url": "https://github.com/luizrn/n8n-monitor/issues" },

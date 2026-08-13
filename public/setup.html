@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Configuração inicial — Monitor n8n</title>
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/base.css">
+</head>
+<body>
+<main class="auth">
+  <form class="auth-caixa" id="form">
+    <h1>Primeiro acesso</h1>
+    <span class="versao" data-versao title="n8n-monitor"></span>
+    <p class="obs">Crie o usuário administrador e o primeiro workspace. O cadastro público fica desligado depois disso.</p>
+    <label for="nome">Nome</label>
+    <input id="nome" required>
+    <label for="email">E-mail</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <label for="senha">Senha</label>
+    <input id="senha" type="password" autocomplete="new-password" minlength="6" required>
+    <label for="workspace">Workspace</label>
+    <input id="workspace" value="Principal" required>
+    <div class="erro" id="erro" hidden></div>
+    <div class="linha-btn"><button type="submit">Criar e entrar</button></div>
+  </form>
+</main>
+<script src="/i18n.js"></script>
+<script>
+fetch('/api/setup-status').then(r=>r.json()).then(d=>{if(!d.precisaSetup)location.href='/login'}).catch(()=>{})
+document.getElementById('form').onsubmit=async ev=>{
+  ev.preventDefault()
+  const erro=document.getElementById('erro')
+  erro.hidden=true
+  const r=await fetch('/api/setup',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({
+    nome:document.getElementById('nome').value,
+    email:document.getElementById('email').value,
+    senha:document.getElementById('senha').value,
+    workspace:document.getElementById('workspace').value
+  })})
+  const d=await r.json().catch(()=>({}))
+  if(!r.ok){erro.hidden=false;erro.textContent=d.erro||I18n.t('Não foi possível concluir o setup.');return}
+  location.href='/'
+}
+</script>
+</body>
+</html>

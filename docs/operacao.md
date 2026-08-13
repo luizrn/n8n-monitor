@@ -7,8 +7,12 @@
 Direta:
 
 ```bash
+npm install
+npm run build
 npm start
 ```
+
+No primeiro acesso, abra `/setup` e crie o administrador e o workspace inicial. Em produção, defina `BETTER_AUTH_SECRET` (32+ caracteres) e `BETTER_AUTH_URL`.
 
 Docker:
 
@@ -52,11 +56,11 @@ A permissão do navegador é pedida ao ativar a opção. Se ela foi negada perma
 
 ## Idioma
 
-Em **Configurações > Geral**, selecione **Português (Brasil)** ou **English**. O valor é persistido em `config.json`, devolvido por `GET /api/config` e aplicado a Monitor, Configurações, Tarefas, Dashboard, Logs, modais, toasts e notificações do sistema. Datas e números usam o locale correspondente. A preferência também é espelhada no `localStorage` para evitar troca visual durante a navegação.
+Em **Configurações > Geral**, selecione **Português (Brasil)** ou **English**. O valor é persistido no SQLite do workspace, devolvido por `GET /api/config` e aplicado a Monitor, Configurações, Tarefas, Dashboard, Logs, modais, toasts e notificações do sistema. Datas e números usam o locale correspondente. A preferência também é espelhada no `localStorage` para evitar troca visual durante a navegação.
 
 ## Tema
 
-Em **Configurações > Geral**, escolha **Escuro** ou **Claro**. Escuro é o padrão e preserva a identidade visual original; Claro usa uma superfície cinza fria de baixo contraste luminoso. O valor é persistido em `config.json` e espelhado em `localStorage`, sendo aplicado por `public/theme.js` antes do CSS para manter o tema entre Monitor, Tarefas, Dashboard e Logs.
+Em **Configurações > Geral**, escolha **Escuro** ou **Claro**. Escuro é o padrão e preserva a identidade visual original; Claro usa uma superfície cinza fria de baixo contraste luminoso. O valor é persistido no SQLite do workspace e espelhado em `localStorage`, sendo aplicado por `public/theme.js` antes do CSS para manter o tema entre Monitor, Tarefas, Dashboard e Logs.
 
 ## Canais externos
 
@@ -88,8 +92,8 @@ O backup contém segredos. Armazene-o criptografado e com acesso restrito.
 ```bash
 npm run check
 npm test
-node scripts/diag-exec.mjs ID
-node scripts/dump-wf.mjs WORKFLOW_ID
+npm run diag -- ID
+npm run dump -- WORKFLOW_ID
 ```
 
 No Windows, os scripts usam `N8N_API_KEY` do ambiente ou do registro do usuário. Em Linux/macOS, exporte `N8N_API_KEY` e, quando necessário, `N8N_BASE_URL`. A saída aplica a mesma redação automática de segredos do painel.
@@ -105,12 +109,18 @@ Erros frequentes:
 | webhook repetido | permissões de escrita no diretório de dados |
 | Kuma sem uptime | métrica indisponível e slug público ausente |
 
+## Login e workspaces
+
+O painel bloqueia Monitor, Tarefas, Dashboard, Logs e as APIs sem sessão. `GET /api/health` permanece público para o health check do Coolify.
+
+Cadastro público está desligado. O primeiro usuário nasce em `/setup`. Depois, em **Configurações > Workspace**, um admin cria workspaces, cadastra usuários (com opção de exigir troca de senha no primeiro login) ou gera um link de convite copiável.
+
 ## Segurança
 
-- Não publique a porta sem autenticação externa.
+- O painel exige login; ainda assim, prefira VPN ou proxy para acesso remoto.
 - As rotas de escrita aceitam somente `Content-Type: application/json`, limitam o corpo a 1 MB e recusam origens de navegador diferentes do host do painel.
 - URLs configuradas aceitam apenas HTTP/HTTPS e não podem conter usuário ou senha embutidos. Headers reservados não podem ser sobrescritos por destinos HTTP.
-- Configuração, tarefas, reconhecimentos e deduplicação são gravados de forma atômica com permissão `0600`. A API não expõe o caminho do host.
+- Configuração, tarefas, reconhecimentos e deduplicação ficam no SQLite por workspace. A API não expõe o caminho do host.
 - Uma tarefa ou reconhecimento só é limpo quando a fonte respondeu e confirmou que o alerta desapareceu. Indisponibilidade do n8n ou Kuma não conta como recuperação.
 - URLs de webhook HTTP e Discord, tokens e chaves nunca retornam em `GET /api/config`; campo secreto vazio preserva o valor salvo.
 - Não monte o diretório de dados dentro do repositório.

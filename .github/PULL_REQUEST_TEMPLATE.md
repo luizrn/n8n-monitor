@@ -12,7 +12,7 @@
 
 ## Verificação / Verification
 
-- [ ] `npm test`
+- [ ] `npm test` (ou a suíte isolada: `test:unit` / `test:server` / `test:html` / `test:docs`)
 - [ ] `npm run check`
 - [ ] Fluxo validado no navegador, quando aplicável
 - [ ] Documentação atualizada
