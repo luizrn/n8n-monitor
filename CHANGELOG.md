@@ -7,6 +7,7 @@ Todas as mudanças relevantes serão registradas aqui. O projeto segue [Keep a C
 ## Unreleased
 
 - aba Workspace reorganizada, com campo para renomear o workspace ativo.
+- workspace novo não herda config, tokens nem conexões do JSON legado nem de outro workspace.
 
 ## [2.0.0] — 2026-08-13
 

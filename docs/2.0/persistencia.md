@@ -26,14 +26,14 @@ Padrão: `%LOCALAPPDATA%\n8n-monitor` no Windows, `$HOME/n8n-monitor` nos demais
 
 ## Import legado
 
-No setup (e ao criar workspace ainda vazio), o processo lê, se existirem:
+Só no **setup inicial** (primeiro workspace), o processo lê, se existirem:
 
 - `config.json`
 - `tarefas.json`
 - `reconhecimentos.json`
 - `webhook-estado.json`
 
-e copia para o `organization_id` atual. Cada workspace importa no máximo uma vez.
+e copia para aquele `organization_id`. Workspace novo nasce vazio: sem instâncias, Kuma, destinos nem tokens. O JSON legado não é reimportado.
 
 ## Coletor
 

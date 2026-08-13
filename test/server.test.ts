@@ -160,12 +160,25 @@ test('rejeita URLs inseguras sem alterar a configuracao', async (t) => {
 })
 
 test('isola configuracao entre workspaces', async (t) => {
-  const s = await subir({ idioma: 'pt-BR' })
+  const s = await subir({
+    idioma: 'pt-BR',
+    instancias: [{ nome: 'Legado', baseUrl: 'https://n8n.example.com', apiKey: 'chave-legado' }],
+    uptimeKuma: { ativo: true, baseUrl: 'https://kuma.example.com', token: 'token-legado', slug: 'status' },
+  })
   t.after(() => s.fechar())
   const inicial = await (await s.get('/api/sessao')).json() as { ativo: string }
   const primeiro = inicial.ativo
   assert.ok(primeiro)
-  assert.equal(((await (await s.get('/api/config')).json()) as { idioma: string }).idioma, 'pt-BR')
+  const cfg1 = await (await s.get('/api/config')).json() as {
+    idioma: string
+    instancias: { temChave: boolean }[]
+    uptimeKuma: { ativo: boolean; temToken: boolean; baseUrl: string }
+  }
+  assert.equal(cfg1.idioma, 'pt-BR')
+  assert.equal(cfg1.instancias.length, 1)
+  assert.equal(cfg1.instancias[0].temChave, true)
+  assert.equal(cfg1.uptimeKuma.ativo, true)
+  assert.equal(cfg1.uptimeKuma.temToken, true)
 
   const criado = await s.post('/api/workspace', { nome: 'Outro' })
   assert.equal(criado.ok, true)
@@ -175,17 +188,37 @@ test('isola configuracao entre workspaces', async (t) => {
   assert.ok(segundo)
   assert.notEqual(segundo, primeiro)
 
+  const cfg2 = await (await s.get('/api/config')).json() as {
+    instancias: unknown[]
+    uptimeKuma: { ativo: boolean; temToken: boolean; baseUrl: string; slug: string }
+    webhook: { destinos: unknown[] }
+  }
+  assert.deepEqual(cfg2.instancias, [])
+  assert.equal(cfg2.uptimeKuma.ativo, false)
+  assert.equal(cfg2.uptimeKuma.temToken, false)
+  assert.equal(cfg2.uptimeKuma.baseUrl, '')
+  assert.equal(cfg2.uptimeKuma.slug, '')
+  assert.deepEqual(cfg2.webhook?.destinos || [], [])
+
   const salvo = await s.post('/api/config', { idioma: 'en' })
   assert.equal(salvo.ok, true)
   assert.equal(((await (await s.get('/api/config')).json()) as { idioma: string }).idioma, 'en')
 
   const voltar = await s.post('/api/workspace/ativar', { id: primeiro })
   assert.equal(voltar.ok, true)
-  assert.equal(((await (await s.get('/api/config')).json()) as { idioma: string }).idioma, 'pt-BR')
+  const deNovo = await (await s.get('/api/config')).json() as {
+    idioma: string
+    instancias: { temChave: boolean }[]
+    uptimeKuma: { temToken: boolean }
+  }
+  assert.equal(deNovo.idioma, 'pt-BR')
+  assert.equal(deNovo.instancias.length, 1)
+  assert.equal(deNovo.uptimeKuma.temToken, true)
 
   const ir = await s.post('/api/workspace/ativar', { id: segundo })
   assert.equal(ir.ok, true)
   assert.equal(((await (await s.get('/api/config')).json()) as { idioma: string }).idioma, 'en')
+  assert.deepEqual(((await (await s.get('/api/config')).json()) as { instancias: unknown[] }).instancias, [])
 })
 
 test('setup-status e segundo setup, login e cadastro interno', async (t) => {

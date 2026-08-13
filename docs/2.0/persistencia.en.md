@@ -26,14 +26,14 @@ Defaults: `%LOCALAPPDATA%\n8n-monitor` on Windows, `$HOME/n8n-monitor` elsewhere
 
 ## Legacy import
 
-On setup (and when creating a still-empty workspace), the process reads, if present:
+Only on **initial setup** (first workspace), the process reads, if present:
 
 - `config.json`
 - `tarefas.json`
 - `reconhecimentos.json`
 - `webhook-estado.json`
 
-and copies them into the current `organization_id`. Each workspace imports at most once.
+and copies them into that `organization_id`. A new workspace starts empty: no instances, Kuma, destinations, or tokens. Legacy JSON is not imported again.
 
 ## Collector
 

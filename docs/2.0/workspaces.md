@@ -20,7 +20,7 @@ O topo de Monitor, Tarefas, Dashboard e Logs lista os workspaces do usuário. Tr
 
 ## Criar
 
-`POST /api/workspace` com `{ nome }`. O criador vira owner. A sessão passa a apontar para o novo workspace (vazio, salvo import legado se ainda não houve config).
+`POST /api/workspace` com `{ nome }`. O criador vira owner. A sessão passa a apontar para o novo workspace, **vazio** (sem copiar instâncias, tokens nem destinos de outro workspace). JSON legado só entra no setup inicial.
 
 ## Renomear
 

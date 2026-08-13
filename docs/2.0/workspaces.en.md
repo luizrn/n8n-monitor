@@ -20,7 +20,7 @@ The top bar on Monitor, Tasks, Dashboard, and Logs lists the user’s workspaces
 
 ## Create
 
-`POST /api/workspace` with `{ nome }`. The creator becomes owner. The session then points at the new workspace (empty, unless leftover JSON is imported because that org has no config yet).
+`POST /api/workspace` with `{ nome }`. The creator becomes owner. The session then points at the new workspace, which starts **empty** (no instances, tokens, or destinations copied from another workspace). Legacy JSON is imported only on initial setup.
 
 ## Rename
 

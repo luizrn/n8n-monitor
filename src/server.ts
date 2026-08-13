@@ -19,7 +19,6 @@ import { chaveDeRegistroValida, registroSeguro, urlHttpValida } from './seguranc
 import { coletarWorkspaces, momentoColeta, persistirConfig, persistirReconhecimentos,
   prepararRuntime, runtimeDe,
 } from './workspace.js'
-import { importarLegadoSeHouver } from './persistencia.js'
 import {
   convitePorId, executarSetup, listarMembros, listarWorkspacesDoUsuario, marcarSenhaTrocada,
   papelNaOrg, podeGerenciar, precisaSetup, precisaTrocarSenha, renomearWorkspace, sessaoDe, slugDe,
@@ -233,7 +232,6 @@ const servidor = createServer(async (req: IncomingMessage, res: ServerResponse) 
         })
         const novoId = (criado as { id?: string })?.id
         if (novoId) {
-          await importarLegadoSeHouver(novoId)
           await prepararRuntime(novoId)
           await auth.api.setActiveOrganization({ body: { organizationId: novoId }, headers })
         }
