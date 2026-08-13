@@ -49,6 +49,11 @@ async function subir(config: Record<string, unknown> = {}) {
             headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
             body: JSON.stringify(body),
           }),
+          patch: (path: string, body: unknown) => fetch(`http://127.0.0.1:${porta}${path}`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
+            body: JSON.stringify(body),
+          }),
           fechar: async () => {
             proc.kill('SIGTERM')
             await new Promise((ok) => {
@@ -230,4 +235,23 @@ test('convite gera link publico copiavel', async (t) => {
   assert.equal(info.ok, true)
   const dados = await info.json() as { email: string }
   assert.equal(dados.email, 'convite@test.local')
+})
+
+test('renomeia o workspace ativo e recusa sem sessao', async (t) => {
+  const s = await subir()
+  t.after(() => s.fechar())
+  assert.equal((await fetch(`http://127.0.0.1:${s.porta}/api/workspace`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ nome: 'X' }),
+  })).status, 401)
+  const vazio = await s.patch('/api/workspace', { nome: '  ' })
+  assert.equal(vazio.status, 400)
+  const r = await s.patch('/api/workspace', { nome: 'Stackbase' })
+  assert.equal(r.ok, true)
+  const corpo = await r.json() as { nome: string }
+  assert.equal(corpo.nome, 'Stackbase')
+  const sessao = await (await s.get('/api/sessao')).json() as { workspaces: { name: string; id: string }[]; ativo: string }
+  const atual = sessao.workspaces.find((w) => w.id === sessao.ativo)
+  assert.equal(atual?.name, 'Stackbase')
 })

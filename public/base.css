@@ -176,12 +176,30 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 .versao{font-size:11px;font-weight:650;letter-spacing:.04em;color:var(--ink3);
   border:1px solid var(--linha);border-radius:999px;padding:2px 8px;flex:none}
 .versao:empty{display:none}
-.auth-caixa .versao{display:inline-block;margin:0 0 10px}
-.auth{min-height:100vh;display:grid;place-items:center;padding:24px}
-.auth-caixa{width:min(420px,100%);background:var(--cartao);border:1px solid var(--linha);border-radius:14px;padding:22px}
-.auth-caixa h1{margin:0 0 6px;font-size:20px}
-.auth-caixa .erro{color:var(--ruim);font-size:12.5px;margin-top:10px}
+.auth-caixa .versao{display:inline-block;margin:0 0 14px}
+.auth{min-height:100vh;display:grid;place-items:center;padding:28px 20px}
+.auth-caixa{width:min(480px,100%);background:var(--cartao);border:1px solid var(--linha);border-radius:16px;padding:32px 28px}
+.auth-caixa h1{margin:0 0 4px;font-size:24px;letter-spacing:-.02em}
+.auth-caixa .obs{font-size:13.5px;margin:0 0 8px;line-height:1.45}
+.auth-caixa label{font-size:13.5px;font-weight:560;margin:18px 0 8px}
+.auth-caixa input{width:100%;font-size:16px;padding:13px 14px;border-radius:10px}
+.auth-caixa .erro{color:var(--ruim);font-size:13.5px;margin-top:14px}
+.auth-caixa .linha-btn{margin-top:24px}
+.auth-caixa .linha-btn button{width:100%;font-size:15px;font-weight:620;padding:12px 16px;color:var(--ink);border-color:color-mix(in oklab,var(--calmo) 45%,var(--linha));background:color-mix(in oklab,var(--calmo) 14%,var(--cartao))}
+.auth-caixa .linha-btn button:hover{border-color:var(--calmo);background:color-mix(in oklab,var(--calmo) 22%,var(--cartao))}
 .auth-caixa .linha-check{display:flex;align-items:center;gap:8px;margin:12px 0}
 .membros{display:grid;gap:8px;margin:10px 0}
 .membro{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--linha)}
 .convite-link{word-break:break-all}
+.ws-bloco{border:1px solid var(--linha);border-radius:8px;padding:14px;background:var(--sup);margin:0 0 12px}
+.ws-bloco h4{margin:0 0 4px;font-size:13px}
+.ws-bloco>.obs,.ws-bloco>p.obs{margin:0 0 12px}
+.ws-linha{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
+.ws-linha input,.ws-bloco input,.ws-bloco select{width:100%}
+.ws-grade{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-top:4px}
+.ws-grade .largo{grid-column:1/-1}
+.ws-bloco .acoes{margin-top:12px}
+@media(max-width:700px){
+  .ws-linha,.ws-grade{grid-template-columns:1fr}
+  .ws-grade .largo{grid-column:auto}
+}

@@ -25,6 +25,9 @@ Seletor de workspace, nome do usuário e **Sair**. Trocar o seletor recarrega a 
 
 ## Aba Workspace (Configurações)
 
+Blocos separados: workspace atual (renomear), lista + criar, usuários e convite.
+
+- **renomear** o workspace ativo (`PATCH /api/workspace` com `{ nome }`, owner/admin)
 - criar workspace (nome)
 - listar membros
 - cadastrar: nome, e-mail, senha, papel, checkbox de troca no primeiro login

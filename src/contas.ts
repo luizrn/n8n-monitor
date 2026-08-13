@@ -131,3 +131,10 @@ export function marcarSenhaTrocada(userId: string) {
 export function precisaTrocarSenha(user: { mustChangePassword?: boolean | number | null }) {
   return user.mustChangePassword === true || user.mustChangePassword === 1
 }
+
+export function renomearWorkspace(organizationId: string, nome: string) {
+  const n = nome.trim().slice(0, 120)
+  if (!n) return null
+  const r = db.prepare('UPDATE organization SET name = ? WHERE id = ?').run(n, organizationId)
+  return r.changes ? n : null
+}

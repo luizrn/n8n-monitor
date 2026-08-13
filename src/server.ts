@@ -22,7 +22,7 @@ import { coletarWorkspaces, momentoColeta, persistirConfig, persistirReconhecime
 import { importarLegadoSeHouver } from './persistencia.js'
 import {
   convitePorId, executarSetup, listarMembros, listarWorkspacesDoUsuario, marcarSenhaTrocada,
-  papelNaOrg, podeGerenciar, precisaSetup, precisaTrocarSenha, sessaoDe, slugDe,
+  papelNaOrg, podeGerenciar, precisaSetup, precisaTrocarSenha, renomearWorkspace, sessaoDe, slugDe,
 } from './contas.js'
 import { copiarCookies, ErroHttp, json, lerCorpo, redirecionar } from './http.js'
 import { VERSAO } from './versao.js'
@@ -238,6 +238,18 @@ const servidor = createServer(async (req: IncomingMessage, res: ServerResponse) 
           await auth.api.setActiveOrganization({ body: { organizationId: novoId }, headers })
         }
         return json(res, 200, { ok: true, workspace: criado })
+      }
+
+      if (url.pathname === '/api/workspace' && req.method === 'PATCH') {
+        const ativo = session.session.activeOrganizationId as string | undefined
+        if (!ativo) throw new ErroHttp(403, 'sem-workspace')
+        if (!podeGerenciar(papelNaOrg(session.user.id, ativo))) throw new ErroHttp(403, 'sem permissão')
+        const corpo = await lerCorpo(req)
+        const nome = String(corpo.nome || '').trim().slice(0, 120)
+        if (!nome) throw new ErroHttp(400, 'nome é obrigatório')
+        const salvo = renomearWorkspace(ativo, nome)
+        if (!salvo) throw new ErroHttp(404, 'workspace não encontrado')
+        return json(res, 200, { ok: true, id: ativo, nome: salvo })
       }
 
       if (url.pathname === '/api/workspace/ativar' && req.method === 'POST') {
