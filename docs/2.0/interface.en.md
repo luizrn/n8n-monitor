@@ -25,6 +25,9 @@ Workspace selector, user name, and **Sign out**. Changing the selector reloads t
 
 ## Workspace tab (Settings)
 
+Separate blocks: current workspace (rename), list + create, users, and invite.
+
+- **rename** the active workspace (`PATCH /api/workspace` with `{ nome }`, owner/admin)
 - create a workspace (name)
 - list members
 - register: name, email, password, role, first-login password-change checkbox

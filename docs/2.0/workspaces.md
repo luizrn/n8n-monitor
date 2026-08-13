@@ -22,11 +22,15 @@ O topo de Monitor, Tarefas, Dashboard e Logs lista os workspaces do usuário. Tr
 
 `POST /api/workspace` com `{ nome }`. O criador vira owner. A sessão passa a apontar para o novo workspace (vazio, salvo import legado se ainda não houve config).
 
+## Renomear
+
+`PATCH /api/workspace` com `{ nome }` altera o workspace **ativo**. Só owner/admin. O slug interno não muda.
+
 ## Papéis
 
 | Papel | Pode |
 |---|---|
-| owner / admin | criar workspace, cadastrar, convidar, listar membros, salvar config |
+| owner / admin | criar workspace, **renomear o ativo**, cadastrar, convidar, listar membros, salvar config |
 | member | usar Monitor/Tarefas/Dashboard/Logs do workspace ativo |
 
 Sem workspace ativo as APIs de dados respondem `403` com `motivo: "sem-workspace"`.

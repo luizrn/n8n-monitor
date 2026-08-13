@@ -93,27 +93,48 @@ body{overflow:hidden}.app{width:98%;min-width:0;height:100vh;max-width:none;marg
     <button id="btAddDestino">Adicionar destino</button>
   </section>
   <section class="aba" id="aba-ws" hidden>
-    <h4 class="monitor-lista-titulo">Workspaces</h4>
-    <div class="obs">Cada workspace tem instâncias, tarefas e alertas isolados. Troque pelo seletor no topo.</div>
-    <div id="wsLista"></div>
-    <label for="wsNovo">Novo workspace</label>
-    <input id="wsNovo" placeholder="Nome do workspace">
-    <div class="acoes"><button id="btAddWs">Criar workspace</button><span class="obs" id="wsStatus"></span></div>
-    <h4 class="monitor-lista-titulo">Usuários deste workspace</h4>
-    <div class="membros" id="wsMembros"></div>
-    <label for="uNome">Nome</label><input id="uNome">
-    <label for="uEmail">E-mail</label><input id="uEmail" type="email">
-    <label for="uSenha">Senha</label><input id="uSenha" type="password" autocomplete="new-password">
-    <label for="uPapel">Papel</label>
-    <select id="uPapel"><option value="member">Membro</option><option value="admin">Admin</option></select>
-    <label class="linha-check"><input id="uTroca" type="checkbox" checked> Trocar senha no primeiro login</label>
-    <div class="acoes"><button id="btAddUser">Cadastrar usuário</button><span class="obs" id="uStatus"></span></div>
-    <h4 class="monitor-lista-titulo">Convidar</h4>
-    <label for="cEmail">E-mail</label><input id="cEmail" type="email">
-    <label for="cPapel">Papel</label>
-    <select id="cPapel"><option value="member">Membro</option><option value="admin">Admin</option></select>
-    <div class="acoes"><button id="btConvite">Gerar convite</button></div>
-    <div class="obs convite-link" id="cLink"></div>
+    <div class="ws-bloco">
+      <h4>Workspace atual</h4>
+      <p class="obs">Instâncias, tarefas e alertas deste workspace ficam isolados dos outros. Troque pelo seletor no topo.</p>
+      <label for="wsNome">Nome</label>
+      <div class="ws-linha">
+        <input id="wsNome" maxlength="120">
+        <button type="button" id="btRenomearWs">Salvar nome</button>
+      </div>
+      <div class="obs" id="wsNomeStatus"></div>
+    </div>
+    <div class="ws-bloco">
+      <h4>Seus workspaces</h4>
+      <div id="wsLista"></div>
+      <label for="wsNovo">Novo workspace</label>
+      <div class="ws-linha">
+        <input id="wsNovo" placeholder="Nome do workspace" maxlength="120">
+        <button type="button" id="btAddWs">Criar workspace</button>
+      </div>
+      <div class="obs" id="wsStatus"></div>
+    </div>
+    <div class="ws-bloco" id="wsGestao">
+      <h4>Usuários deste workspace</h4>
+      <div class="membros" id="wsMembros"></div>
+      <div class="ws-grade">
+        <div><label for="uNome">Nome</label><input id="uNome"></div>
+        <div><label for="uEmail">E-mail</label><input id="uEmail" type="email"></div>
+        <div><label for="uSenha">Senha</label><input id="uSenha" type="password" autocomplete="new-password"></div>
+        <div><label for="uPapel">Papel</label><select id="uPapel"><option value="member">Membro</option><option value="admin">Admin</option></select></div>
+        <label class="linha-check largo"><input id="uTroca" type="checkbox" checked> Trocar senha no primeiro login</label>
+      </div>
+      <div class="acoes"><button type="button" id="btAddUser">Cadastrar usuário</button><span class="obs" id="uStatus"></span></div>
+    </div>
+    <div class="ws-bloco" id="wsConvite">
+      <h4>Convidar</h4>
+      <p class="obs">Gera um link copiável. Não envia e-mail.</p>
+      <div class="ws-grade">
+        <div><label for="cEmail">E-mail</label><input id="cEmail" type="email"></div>
+        <div><label for="cPapel">Papel</label><select id="cPapel"><option value="member">Membro</option><option value="admin">Admin</option></select></div>
+      </div>
+      <div class="acoes"><button type="button" id="btConvite">Gerar convite</button></div>
+      <div class="obs convite-link" id="cLink"></div>
+    </div>
   </section>
   <div class="linha-btn"><span class="obs cresce" id="salvarStatus"></span><button id="btFecharConfig">Fechar</button><button id="btSalvar">Salvar</button></div>
 </div></dialog>
@@ -204,10 +225,30 @@ fetch('/api/config').then(r=>r.json()).then(c=>Toaster.configurar(c.notificacoes
 Sessao.carregar().then(s=>Sessao.montar($('#sessao'),s))
 async function carregarWorkspace(){
   const[s,u]=await Promise.all([Sessao.carregar(),fetch('/api/usuarios').then(r=>r.ok?r.json():{itens:[]}).catch(()=>({itens:[]}))])
-  $('#wsLista').innerHTML=(s.workspaces||[]).map(w=>`<div class="membro"><b>${esc(w.name)}</b><span class="tag">${esc(tr(w.role))}</span>${w.id===s.ativo?'<span class="tag on">'+esc(tr('atual'))+'</span>':''}</div>`).join('')
-  $('#wsMembros').innerHTML=(u.itens||[]).map(m=>`<div class="membro"><div><b>${esc(m.nome)}</b><div class="sub2">${esc(m.email)}</div></div><span class="tag">${esc(tr(m.papel))}</span>${m.mustChangePassword?'<span class="tag atencao">'+esc(tr('trocar senha'))+'</span>':''}</div>`).join('')||'<div class="obs">'+esc(tr('Nenhum usuário listado.'))+'</div>'
+  if(!s)return
+  const pode=s.papel==='owner'||s.papel==='admin'
+  const atual=(s.workspaces||[]).find(w=>w.id===s.ativo)
+  $('#wsNome').value=atual?.name||''
+  $('#wsNome').readOnly=!pode
+  $('#btRenomearWs').hidden=!pode
+  $('#wsGestao').hidden=!pode
+  $('#wsConvite').hidden=!pode
+  $('#wsLista').innerHTML=(s.workspaces||[]).map(w=>`<div class="membro"><b>${esc(w.name)}</b><span class="tag">${esc(tr(w.role))}</span>${w.id===s.ativo?'<span class="tag on">'+esc(tr('atual'))+'</span>':''}</div>`).join('')||'<div class="obs">'+esc(tr('Nenhum workspace.'))+'</div>'
+  if(pode) $('#wsMembros').innerHTML=(u.itens||[]).map(m=>`<div class="membro"><div><b>${esc(m.nome)}</b><div class="sub2">${esc(m.email)}</div></div><span class="tag">${esc(tr(m.papel))}</span>${m.mustChangePassword?'<span class="tag atencao">'+esc(tr('trocar senha'))+'</span>':''}</div>`).join('')||'<div class="obs">'+esc(tr('Nenhum usuário listado.'))+'</div>'
 }
 $('#btConfig').onclick=async()=>{await abrirConfig();await carregarWorkspace()}
+$('#btRenomearWs').onclick=async()=>{
+  const nome=$('#wsNome').value.trim();if(!nome)return
+  $('#wsNomeStatus').textContent=tr('salvando…')
+  const r=await fetch('/api/workspace',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({nome})})
+  const d=await r.json().catch(()=>({}))
+  $('#wsNomeStatus').textContent=r.ok?tr('Nome salvo.'):(d.erro||tr('Não foi possível salvar o nome.'))
+  if(r.ok){
+    const s=await Sessao.carregar()
+    Sessao.montar($('#sessao'),s)
+    await carregarWorkspace()
+  }
+}
 $('#btAddWs').onclick=async()=>{
   const nome=$('#wsNovo').value.trim();if(!nome)return
   $('#wsStatus').textContent=tr('criando…')

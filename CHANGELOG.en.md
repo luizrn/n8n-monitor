@@ -6,6 +6,8 @@ All notable changes will be recorded here. The project follows [Keep a Changelog
 
 ## Unreleased
 
+- Workspace tab laid out in blocks, with a field to rename the active workspace.
+
 ## [2.0.0] — 2026-08-13
 
 ### Added

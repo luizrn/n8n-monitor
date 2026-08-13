@@ -22,11 +22,15 @@ The top bar on Monitor, Tasks, Dashboard, and Logs lists the user’s workspaces
 
 `POST /api/workspace` with `{ nome }`. The creator becomes owner. The session then points at the new workspace (empty, unless leftover JSON is imported because that org has no config yet).
 
+## Rename
+
+`PATCH /api/workspace` with `{ nome }` changes the **active** workspace. Owner/admin only. The internal slug does not change.
+
 ## Roles
 
 | Role | Can |
 |---|---|
-| owner / admin | create workspaces, register users, invite, list members, save config |
+| owner / admin | create workspaces, **rename the active one**, register users, invite, list members, save config |
 | member | use Monitor/Tasks/Dashboard/Logs of the active workspace |
 
 With no active workspace, data APIs respond `403` with `motivo: "sem-workspace"`.

@@ -80,6 +80,7 @@ test('paginas de auth e workspace cobrem chaves novas', async () => {
     'Trocar senha',
     'Workspace',
     'Cadastrar usuário',
+    'Salvar nome',
     'Gerar convite',
     'Não foi possível entrar.',
     'Você foi convidado para {workspace} como {role}.',
