@@ -2,41 +2,76 @@
 
 > **Portuguese version:** [Read the project README in Portuguese.](README.md)
 
+**Version 2.0.0** (this tree). Previous line: [1.0.0 guide](docs/1.0/README.en.md) · [v1.0.0 release](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0).
+
 [![MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![version](https://img.shields.io/badge/version-2.0.0-0ea5e9.svg)](docs/2.0/README.en.md)
 [![Node 22+](https://img.shields.io/badge/node-22.5%2B-339933.svg)](https://nodejs.org/)
 
-<img width="1621" height="760" alt="Unified n8n and Uptime Kuma monitor" src="https://github.com/user-attachments/assets/c7f639e0-6f10-44f6-8da6-00cf63a49c07" />
+<img width="1902" height="909" alt="Monitor" src="https://github.com/user-attachments/assets/8d1e59fd-54e7-403b-a248-81fa63ee8441" />
+<img width="1896" height="859" alt="Settings" src="https://github.com/user-attachments/assets/40069a6b-ef2a-4ff4-9a1b-e2b1ba51e54a" />
+<img width="1895" height="909" alt="Tasks" src="https://github.com/user-attachments/assets/7175d343-5360-4abb-a34f-8fe6a446b5f7" />
+<img width="1879" height="840" alt="Dashboard" src="https://github.com/user-attachments/assets/3142981c-b122-444a-b7ad-a999254a364b" />
+<img width="1014" height="459" alt="Login" src="https://github.com/user-attachments/assets/78d50c58-c4d1-4407-bf48-b76f4e0cba2b" />
 
 **Unified monitoring for n8n + Uptime Kuma.**
 
 The project brings automation health and service availability into one interface. For n8n, it detects errors, stuck executions, and missed schedules across multiple instances. For Uptime Kuma, it tracks online and offline monitors, maintenance, response time, uptime, TLS certificates, and domain expiration. Incidents from both sources appear in the same Monitor and can be handled through a Tasks queue.
 
-TypeScript Node.js server, SQLite, and Better Auth. Version **2.0.0**. HTML pages with no frontend bundler.
+TypeScript server (Node.js 22.5+), native HTTP, SQLite, Better Auth, and HTML pages with no bundler. Login is required, workspaces are isolated, and public signup stays off.
 
 ## Features
 
+### 2.0.0 platform
+
 | | Feature | How it works |
 |---|---|---|
-| 🚨 | Grouped alerts | Groups repeated failures by instance, workflow, and node while preserving magnitude and diagnostics. |
-| ⏱️ | Stuck executions | Live timer and yellow alert after 30 minutes. |
-| 📅 | Schedule auditing | Compares Schedule Trigger, Cron, and Interval definitions with the executions actually retained by n8n. |
-| 🏷️ | Multiple instances | Configuration, cache, links, tags, and filters isolated by n8n instance, with a summary of active connections. |
-| ✅ | Automatic resolution | Removes an alert when a later execution confirms recovery. |
-| 📋 | Tasks | Moves alerts to List or Kanban views with six statuses, notes, and history. |
-| 📊 | Dashboard | Volume, failures, error rate, median, and p95 for periods of up to seven days. |
-| 🔎 | Logs | Search and filters by status, mode, period, and instance, with redacted diagnostics and access from the n8n Details button. |
-| 🔔 | Browser notifications | Reports yellow and red changes while the Monitor is open in the background. |
-| 🔊 | Sound | Plays only for red alerts, with volume, test control, and an anti-spam cooldown. |
-| 🪝 | External channels | Sends opened, worsened, and resolved events simultaneously to multiple HTTP Webhooks, WhatsApp/Evolution API, and Discord destinations. |
-| 🟢 | Uptime Kuma | Displays status, response time, uptime, maintenance, paused state, and selectable monitors. |
-| 🔐 | TLS | Warns about certificates that are close to expiration, expired, or invalid. |
-| 🌐 | Domains | Checks domain expiration through RDAP and ignores TLDs without a reliable source. |
-| 🔐 | Login and workspaces | Email/password, internal signup, invites, and per-workspace isolation. |
-| 🧪 | Automated tests | `node:test`, server smoke tests, and local syntax checks. |
-| 🌍 | Bilingual interface | Brazilian Portuguese and English across Monitor, Settings, Tasks, Dashboard, Logs, dialogs, and notifications. |
-| 🌓 | Themes | Default dark theme and a soft light theme, persisted and applied across every screen. |
+| 🔐 | Login | Better Auth with email/password; httpOnly cookie; public signup disabled. |
+| 🧭 | First-run setup | `/setup` creates the administrator and the first workspace. |
+| 🔑 | Password change | Internal signup can require a new password on first login (`mustChangePassword`). |
+| 🏢 | Workspaces | Each organization isolates instances, Kuma, destinations, tasks, and cache. A new workspace starts empty. |
+| 👤 | Users and roles | Owners/admins register members; members use the active workspace. |
+| ✉️ | Invites | Copiable link (no SMTP); accept at `/aceitar-convite`. |
+| 💾 | SQLite | Source of truth in `n8n-monitor.sqlite`; legacy JSON only on first-setup import. |
+| 🧱 | TypeScript | Code in `src/`, `tsc` → `dist/`, ESM. |
+| 🌐 | Native HTTP | `node:http`, no Express/Fastify. |
+| ❤️ | Health check | Public `GET /api/health` with `versao` and no secrets (Coolify and similar). |
+| 🛡️ | API secrets | `GET /api/config` never returns keys, tokens, or secret URLs; empty POST fields keep stored values. |
+| 🐳 | Docker | Node 22 Alpine, `/data` volume, Compose on `127.0.0.1:8787`. |
+| 🧪 | Tests | `node:test`: unit, HTTP+auth, HTML/i18n, and pt/en doc pairs. |
 
-## Quick Start
+### n8n
+
+| | Feature | How it works |
+|---|---|---|
+| 🚨 | Grouped alerts | Repeated failures by instance, workflow, and node, with magnitude and diagnostics. |
+| ⏱️ | Stuck executions | Live timer and yellow alert after 30 minutes. |
+| 📅 | Schedule auditing | Compares Schedule Trigger, Cron, and Interval with executions retained by n8n. |
+| 🏷️ | Multiple instances | Configuration, cache, links, tags, and filters isolated per instance. |
+| ✅ | Automatic resolution | Drops an alert only when a later execution confirms recovery. Source outage is not a false recovery. |
+| 📊 | Dashboard | Volume, failures, error rate, median, and p95 for up to seven days. |
+| 🔎 | Logs | Search by status, mode, period, and instance; Details on the n8n block. |
+
+### Uptime Kuma
+
+| | Feature | How it works |
+|---|---|---|
+| 🟢 | Monitors | Status, response, uptime, maintenance, pause, and which monitors appear. |
+| 🔐 | TLS | Certificates near expiry, expired, or invalid. |
+| 🌐 | Domains | Expiration via RDAP; TLDs without a reliable source have no deadline. |
+
+### Operations and alerts
+
+| | Feature | How it works |
+|---|---|---|
+| 📋 | Tasks | List and Kanban with six statuses, notes, and history. **Under analysis** leaves the Monitor. |
+| 🔔 | Browser | Yellow and red changes while the Monitor is in the background. |
+| 🔊 | Sound | Red only; volume, test, and anti-spam cooldown. |
+| 🪝 | External channels | Multiple destinations at once: HTTP webhook, WhatsApp/Evolution API, and Discord (`opened`, `worsened`, `resolved`). |
+| 🌍 | Language | Brazilian Portuguese and English on every screen, toast, and notification. |
+| 🌓 | Themes | Default dark and soft light, persisted on the workspace. |
+
+## Quick start
 
 ### Node.js
 
@@ -48,7 +83,7 @@ npm run build
 npm start
 ```
 
-Open `http://127.0.0.1:8787`, create the first user on setup, go to **Settings**, add your n8n instances, and connect Uptime Kuma with its URL and API key.
+Open `http://127.0.0.1:8787`. With no users, the app sends you to `/setup`. Then open **Settings**, add n8n instances, and optionally Uptime Kuma (URL and API key).
 
 ### Docker Compose
 
@@ -57,7 +92,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-Compose publishes only `127.0.0.1:8787` and keeps SQLite, configuration, tasks, and state in the `n8n-monitor-data` volume. Create the administrator on first access. Set `BETTER_AUTH_SECRET` (32+ characters) and `BETTER_AUTH_URL` in production.
+Compose publishes only `127.0.0.1:8787` and stores SQLite and state in `n8n-monitor-data`. In production set `BETTER_AUTH_SECRET` (32+ characters) and `BETTER_AUTH_URL` (this dashboard’s public URL, not another environment).
 
 ```bash
 docker compose logs -f monitor
@@ -69,50 +104,50 @@ The dashboard requires login. Prefer a VPN or proxy for remote access.
 
 ## Configuration
 
-The Monitor contains these settings tabs:
+Monitor tabs:
 
-- **General:** interface language and light or dark theme, persisted across every screen.
-- **n8n Instances:** name, URL, API key, activation, and individual connection test.
-- **Notifications:** toast duration from 0 to 600 seconds, browser notifications, sound, and volume.
-- **Uptime Kuma:** URL, API key, optional public-page slug, expiration warning threshold, and monitor selection.
-- **Alert delivery:** a list of HTTP Webhook, WhatsApp/Evolution API, and Discord destinations.
-- **Workspace:** create workspaces, register users (name, email, password, change-on-first-login) and copy invite links.
+- **General:** language and theme, persisted on the workspace.
+- **n8n instances:** name, URL, API key, activation, and per-instance test.
+- **Notifications:** toast 0–600 s, browser, sound, and volume.
+- **Uptime Kuma:** URL, API key, optional public slug, TLS/domain lead time, and monitor selection.
+- **Alert delivery:** HTTP webhook, WhatsApp/Evolution API, and Discord destinations.
+- **Workspace:** rename the active workspace, create workspaces, register users, and copy invite links.
 
-The **Alert delivery** tab starts empty and creates a form only after **Add destination** is selected. The **Documentation** shortcut opens the project's public GitHub guides.
+**Alert delivery** stays empty until **Add destination**. **Documentation** opens the GitHub guides.
 
-Secret fields are always returned empty to the browser. Leaving them empty when saving preserves the current value.
-
-Available environment variables:
+Secret fields are always empty in the browser. Leaving them empty on save keeps the stored value.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `HOST` | `127.0.0.1` | Server network interface. |
+| `HOST` | `127.0.0.1` | Server bind address. |
 | `PORT` | `8787` | HTTP port. |
-| `N8N_MONITOR_DATA_DIR` | user directory | Location of SQLite and persisted files. |
-| `BETTER_AUTH_SECRET` | generated in development | Session secret (required in production, 32+ characters). |
+| `N8N_MONITOR_DATA_DIR` | user directory | SQLite (and legacy JSON, if any). |
+| `BETTER_AUTH_SECRET` | generated in development | Session secret (required in production, 32+). |
 | `BETTER_AUTH_URL` | inferred from the request | Public dashboard URL, e.g. `https://monitor.example.com`. |
-| `N8N_BASE_URL` | `http://localhost:5678` | Seeds the first instance. |
-| `N8N_API_KEY` | empty | Seeds the first instance API key. |
+| `N8N_BASE_URL` | `http://localhost:5678` | Seeds the first instance only on first-setup import. |
+| `N8N_API_KEY` | empty | Seeds the key only on first-setup import. |
 
-Data is stored in `%LOCALAPPDATA%\n8n-monitor` on Windows, `$HOME/n8n-monitor` on other systems, or the directory selected through the environment variable. The database is `n8n-monitor.sqlite`.
+Data: `%LOCALAPPDATA%\n8n-monitor` on Windows, `$HOME/n8n-monitor` elsewhere, `/data` in Docker. File: `n8n-monitor.sqlite`. Full list: [docs/2.0/variaveis.en.md](docs/2.0/variaveis.en.md).
 
 ## Routes
 
 | Route | Screen |
 |---|---|
-| `/login` | Sign in |
 | `/setup` | First user and workspace |
+| `/login` | Sign in |
+| `/aceitar-convite` | Accept invite |
+| `/trocar-senha` | Required password change |
 | `/` | Monitor and Settings |
-| `/tarefas` | Task List and Kanban |
+| `/tarefas` | List and Kanban |
 | `/dashboard` | Historical metrics |
 | `/logs` | Execution search |
-| `/api/health` | Health check without sensitive data |
+| `/api/health` | Public health check |
 
-## Alert Semantics
+## Alert semantics
 
-Each problem has a stable key. Toasts, browser notifications, and sounds are emitted only once while that key remains active, even if its magnitude increases or the page is reloaded. When the source responds and confirms that the problem disappeared, the key is released and a future recurrence may notify again; source unavailability does not produce a false recovery. **Under analysis** moves the item to Tasks and removes it from the Monitor; **Resolved** acknowledges the current magnitude.
+Each problem has a stable key. Toast, notification, and sound fire once while that key is active. Recovery requires source confirmation. **Under analysis** moves to Tasks; **Resolved** acknowledges the current magnitude.
 
-Each external destination maintains its own state machine and receives `opened`, `worsened`, and `resolved` events. See [docs/architecture.en.md](docs/architecture.en.md) for the schema.
+Each external destination has its own state machine (`opened`, `worsened`, `resolved`). Schema: [docs/architecture.en.md](docs/architecture.en.md).
 
 ## Development
 
@@ -131,11 +166,10 @@ See [CONTRIBUTING.en.md](CONTRIBUTING.en.md), [SECURITY.en.md](SECURITY.en.md), 
 
 ## Documentation
 
-- [2.0.0 guide](docs/2.0/README.en.md): login, workspaces, SQLite, TypeScript, and example environment variables.
+- [2.0.0 guide](docs/2.0/README.en.md): login, workspaces, SQLite, TypeScript, and variables.
+- [1.0.0 guide](docs/1.0/README.en.md) and [v1.0.0 release](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0).
 - [AGENTS.en.md](AGENTS.en.md): rules for anyone changing the code.
-- [Architecture](docs/architecture.en.md): components, data, APIs, and payloads.
-- [Decisions](docs/decisions.en.md): reliability and anti-spam criteria.
-- [Operations](docs/operations.en.md): installation, security, and troubleshooting.
+- [Architecture](docs/architecture.en.md), [Decisions](docs/decisions.en.md), [Operations](docs/operations.en.md).
 
 ## License
 

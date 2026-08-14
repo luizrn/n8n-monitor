@@ -2,6 +2,8 @@
 
 > **English version:** [Design decisions](decisions.en.md)
 
+Versão **2.0.0**. Linha 1.0.0: [docs/1.0](1.0/README.md) · [release](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0).
+
 ## Confiabilidade antes de volume
 
 Ausência de execução retida não prova que um agendamento falhou. O comparador só julga o período coberto por dados reais e mostra `sem-dados` quando a retenção não permite conclusão.

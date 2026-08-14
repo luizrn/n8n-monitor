@@ -2,7 +2,7 @@
 
 > **English version:** [Changelog](CHANGELOG.en.md)
 
-Todas as mudanças relevantes serão registradas aqui. O projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e versionamento semântico. A primeira tag estável é **2.0.0**.
+Todas as mudanças relevantes serão registradas aqui. O projeto segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e versionamento semântico. A linha atual é **2.0.0**. A linha anterior está no [guia 1.0.0](docs/1.0/README.md) e no [release v1.0.0](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0).
 
 ## Unreleased
 

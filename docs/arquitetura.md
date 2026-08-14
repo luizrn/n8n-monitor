@@ -2,6 +2,8 @@
 
 > **English version:** [Architecture](architecture.en.md)
 
+Versão **2.0.0**. Guia: [docs/2.0](2.0/README.md). Linha 1.0.0: [docs/1.0](1.0/README.md) · [release](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0).
+
 ## Visão geral
 
 O projeto é um servidor HTTP em TypeScript (Node.js 22) e páginas HTML sem bundler de frontend. Autenticação usa Better Auth; cada workspace (organization) isola configuração, instâncias n8n, Kuma, tarefas e caches. O processo coleta em segundo plano e entrega um estado normalizado às telas.

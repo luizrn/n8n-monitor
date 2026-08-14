@@ -2,6 +2,8 @@
 
 > **Portuguese version:** [Operação](operacao.md)
 
+**2.0.0** guide: [docs/2.0](2.0/README.en.md). **1.0.0** line: [docs/1.0](1.0/README.en.md) · [release](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0).
+
 ## Startup
 
 Direct:

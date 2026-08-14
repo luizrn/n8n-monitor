@@ -2,6 +2,8 @@
 
 > **English version:** [Operations](operations.en.md)
 
+Guia da versão **2.0.0:** [docs/2.0](2.0/README.md). Linha **1.0.0:** [docs/1.0](1.0/README.md) · [release](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0).
+
 ## Inicialização
 
 Direta:

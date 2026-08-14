@@ -2,6 +2,8 @@
 
 > **Portuguese version:** [Decisões de projeto](decisoes.md)
 
+Version **2.0.0**. 1.0.0 line: [docs/1.0](1.0/README.en.md) · [release](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0).
+
 ## Reliability before volume
 
 The absence of a retained execution does not prove that a schedule failed. The comparator evaluates only periods covered by real data and reports `no-data` when retention cannot support a conclusion.

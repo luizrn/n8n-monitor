@@ -2,7 +2,7 @@
 
 > **Portuguese version:** [Changelog](CHANGELOG.md)
 
-All notable changes will be recorded here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and semantic versioning. The first stable tag is **2.0.0**.
+All notable changes will be recorded here. The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and semantic versioning. The current line is **2.0.0**. The previous line is in the [1.0.0 guide](docs/1.0/README.en.md) and the [v1.0.0 release](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0).
 
 ## Unreleased
 

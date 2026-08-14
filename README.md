@@ -2,46 +2,74 @@
 
 > **English version:** [Read the project README in English.](README.en.md)
 
+**Versão 2.0.0** (esta árvore). Linha anterior: [guia 1.0.0](docs/1.0/README.md) · [release v1.0.0](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0).
+
 [![MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![versão](https://img.shields.io/badge/versão-2.0.0-0ea5e9.svg)](docs/2.0/README.md)
 [![Node 22+](https://img.shields.io/badge/node-22.5%2B-339933.svg)](https://nodejs.org/)
-<img width="1902" height="909" alt="image" src="https://github.com/user-attachments/assets/8d1e59fd-54e7-403b-a248-81fa63ee8441" />
-<img width="1896" height="859" alt="image" src="https://github.com/user-attachments/assets/40069a6b-ef2a-4ff4-9a1b-e2b1ba51e54a" />
-<img width="1895" height="909" alt="image" src="https://github.com/user-attachments/assets/7175d343-5360-4abb-a34f-8fe6a446b5f7" />
-<img width="1879" height="840" alt="image" src="https://github.com/user-attachments/assets/3142981c-b122-444a-b7ad-a999254a364b" />
-<img width="1014" height="459" alt="image" src="https://github.com/user-attachments/assets/78d50c58-c4d1-4407-bf48-b76f4e0cba2b" />
 
-
-
-<img width="1621" height="760" alt="Monitor unificado para n8n e Uptime Kuma" src="https://github.com/user-attachments/assets/c7f639e0-6f10-44f6-8da6-00cf63a49c07" />
+<img width="1902" height="909" alt="Monitor" src="https://github.com/user-attachments/assets/8d1e59fd-54e7-403b-a248-81fa63ee8441" />
+<img width="1896" height="859" alt="Configurações" src="https://github.com/user-attachments/assets/40069a6b-ef2a-4ff4-9a1b-e2b1ba51e54a" />
+<img width="1895" height="909" alt="Tarefas" src="https://github.com/user-attachments/assets/7175d343-5360-4abb-a34f-8fe6a446b5f7" />
+<img width="1879" height="840" alt="Dashboard" src="https://github.com/user-attachments/assets/3142981c-b122-444a-b7ad-a999254a364b" />
+<img width="1014" height="459" alt="Login" src="https://github.com/user-attachments/assets/78d50c58-c4d1-4407-bf48-b76f4e0cba2b" />
 
 **Monitor unificado para n8n + Uptime Kuma.**
 
 O projeto reúne em uma única interface a saúde das automações e a disponibilidade dos serviços. No n8n, detecta erros, execuções travadas e agendamentos perdidos em múltiplas instâncias. No Uptime Kuma, acompanha monitores online e offline, manutenção, tempo de resposta, uptime, certificados TLS e expiração de domínios. Os incidentes das duas fontes aparecem no mesmo Monitor e podem ser tratados em uma fila de Tarefas.
 
-Servidor TypeScript em Node.js, SQLite e Better Auth. Versão **2.0.0**. Páginas HTML sem bundler de frontend.
+Servidor TypeScript (Node.js 22.5+), HTTP nativo, SQLite, Better Auth e páginas HTML sem bundler. Login obrigatório, workspaces isolados e signup público desligado.
 
 ## Funcionalidades
 
+### Plataforma 2.0.0
+
 | | Recurso | Como funciona |
 |---|---|---|
-| 🚨 | Alertas agrupados | Agrupa falhas repetidas por instância, workflow e nó, preservando magnitude e diagnóstico. |
+| 🔐 | Login | Better Auth com e-mail e senha; cookie httpOnly; signup público desligado. |
+| 🧭 | Setup inicial | Primeiro acesso em `/setup` cria administrador e o primeiro workspace. |
+| 🔑 | Troca de senha | Cadastro interno pode exigir nova senha no primeiro login (`mustChangePassword`). |
+| 🏢 | Workspaces | Cada organization isola instâncias, Kuma, destinos, tarefas e cache. Workspace novo nasce vazio. |
+| 👤 | Usuários e papéis | Owner/admin cadastram membros; member usa o painel do workspace ativo. |
+| ✉️ | Convites | Link copiável (sem SMTP); aceite em `/aceitar-convite`. |
+| 💾 | SQLite | Fonte da verdade em `n8n-monitor.sqlite`; JSON antigo só no import do primeiro setup. |
+| 🧱 | TypeScript | Código em `src/`, build `tsc` → `dist/`, ESM. |
+| 🌐 | HTTP nativo | `node:http`, sem Express/Fastify. |
+| ❤️ | Health check | `GET /api/health` público, sem segredos, com `versao` (Coolify e equivalentes). |
+| 🛡️ | Segredos na API | `GET /api/config` não devolve chave, token nem URL secreta; campo vazio no POST mantém o valor. |
+| 🐳 | Docker | Node 22 Alpine, volume `/data`, Compose em `127.0.0.1:8787`. |
+| 🧪 | Testes | `node:test`: unit, HTTP+auth, HTML/i18n e pares de documentação pt/en. |
+
+### n8n
+
+| | Recurso | Como funciona |
+|---|---|---|
+| 🚨 | Alertas agrupados | Falhas repetidas por instância, workflow e nó, com magnitude e diagnóstico. |
 | ⏱️ | Execuções travadas | Cronômetro ao vivo e alerta amarelo após 30 minutos. |
-| 📅 | Auditoria de agendamentos | Compara Schedule Trigger, Cron e Interval com as execuções realmente retidas pelo n8n. |
-| 🏷️ | Múltiplas instâncias | Configuração, cache, links, tags e filtros isolados por instância n8n, com resumo das conexões ativas. |
-| ✅ | Resolução automática | Remove o alerta quando uma execução posterior comprova recuperação. |
-| 📋 | Tarefas | Move alertas para Lista ou Kanban com seis estados, notas e histórico. |
-| 📊 | Dashboard | Volume, falhas, taxa de erro, mediana e p95 para períodos de até sete dias. |
-| 🔎 | Logs | Busca e filtros por status, modo, período e instância, com diagnóstico redigido e acesso pelo botão Detalhes do bloco N8N. |
-| 🔔 | Notificação do navegador | Avisa mudanças amarelas e vermelhas quando o Monitor está aberto em segundo plano. |
-| 🔊 | Som | Toca apenas em alerta vermelho, com volume, teste e cooldown anti-spam. |
-| 🪝 | Canais externos | Envia abertura, agravamento e resolução simultaneamente para múltiplos Webhooks HTTP, WhatsApp/Evolution API e Discord. |
-| 🟢 | Uptime Kuma | Exibe status, resposta, uptime, manutenção, pausa e monitores selecionáveis. |
-| 🔐 | TLS | Avisa certificado próximo do vencimento, expirado ou inválido. |
-| 🌐 | Domínios | Consulta expiração por RDAP e ignora TLDs sem fonte confiável. |
-| 🔐 | Login e workspaces | E-mail e senha, cadastro interno, convites e isolamento por workspace. |
-| 🧪 | Testes automatizados | `node:test`, smoke test do servidor e verificações de sintaxe executadas localmente. |
-| 🌍 | Interface bilíngue | Português (Brasil) e inglês em Monitor, Configurações, Tarefas, Dashboard, Logs, modais e notificações. |
-| 🌓 | Temas | Tema escuro padrão e tema claro suave, persistidos e aplicados em todas as telas. |
+| 📅 | Auditoria de agendamentos | Compara Schedule Trigger, Cron e Interval com as execuções retidas pelo n8n. |
+| 🏷️ | Múltiplas instâncias | Configuração, cache, links, tags e filtros isolados por instância. |
+| ✅ | Resolução automática | Remove o alerta só quando uma execução posterior comprova recuperação. Sem falso positivo se a fonte sumir. |
+| 📊 | Dashboard | Volume, falhas, taxa de erro, mediana e p95 até sete dias. |
+| 🔎 | Logs | Busca por status, modo, período e instância; Detalhes no bloco N8N. |
+
+### Uptime Kuma
+
+| | Recurso | Como funciona |
+|---|---|---|
+| 🟢 | Monitores | Status, resposta, uptime, manutenção, pausa e seleção do que entra no Monitor. |
+| 🔐 | TLS | Certificado próximo do vencimento, expirado ou inválido. |
+| 🌐 | Domínios | Expiração via RDAP; TLD sem fonte confiável fica sem prazo. |
+
+### Operação e alertas
+
+| | Recurso | Como funciona |
+|---|---|---|
+| 📋 | Tarefas | Lista e Kanban com seis estados, notas e histórico. **Em análise** tira do Monitor. |
+| 🔔 | Navegador | Notifica mudanças amarelas e vermelhas com o Monitor em segundo plano. |
+| 🔊 | Som | Só em vermelho; volume, teste e cooldown anti-spam. |
+| 🪝 | Canais externos | Vários destinos simultâneos: Webhook HTTP, WhatsApp/Evolution API e Discord (`opened`, `worsened`, `resolved`). |
+| 🌍 | Idioma | Português (Brasil) e inglês em todas as telas, toasts e notificações. |
+| 🌓 | Temas | Escuro padrão e claro suave, persistidos no workspace. |
 
 ## Início rápido
 
@@ -55,7 +83,7 @@ npm run build
 npm start
 ```
 
-Abra `http://127.0.0.1:8787`, crie o primeiro usuário no setup, entre em **Configurações**, adicione suas instâncias n8n e conecte o Uptime Kuma pela URL e API key.
+Abra `http://127.0.0.1:8787`. Sem usuários, o painel leva a `/setup`. Depois entre em **Configurações**, adicione instâncias n8n e, se quiser, o Uptime Kuma (URL e API key).
 
 ### Docker Compose
 
@@ -64,7 +92,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-O Compose publica somente `127.0.0.1:8787` e mantém SQLite, configuração, tarefas e estado no volume `n8n-monitor-data`. No primeiro acesso, crie o administrador. Defina `BETTER_AUTH_SECRET` (32+ caracteres) e `BETTER_AUTH_URL` em produção.
+O Compose publica somente `127.0.0.1:8787` e guarda SQLite e estado no volume `n8n-monitor-data`. Em produção defina `BETTER_AUTH_SECRET` (32+ caracteres) e `BETTER_AUTH_URL` (URL pública deste painel, não a de outro ambiente).
 
 ```bash
 docker compose logs -f monitor
@@ -76,50 +104,50 @@ O painel exige login. Ainda assim, prefira VPN ou proxy quando o acesso for remo
 
 ## Configuração
 
-As abas ficam no Monitor:
+Abas no Monitor:
 
-- **Geral:** idioma da interface e tema claro ou escuro, persistidos para todas as telas.
+- **Geral:** idioma e tema, persistidos no workspace.
 - **Instâncias n8n:** nome, URL, API key, ativação e teste individual.
-- **Notificações:** duração do toast de 0 a 600 segundos, navegador, som e volume.
-- **Uptime Kuma:** URL, API key, slug público opcional, antecedência e seleção de monitores.
-- **Envio de alertas:** lista de destinos Webhook HTTP, WhatsApp/Evolution API e Discord.
-- **Workspace:** criar workspaces, cadastrar usuários (nome, e-mail, senha, troca no primeiro login) e gerar convite copiável.
+- **Notificações:** toast de 0 a 600 s, navegador, som e volume.
+- **Uptime Kuma:** URL, API key, slug público opcional, antecedência TLS/domínio e seleção de monitores.
+- **Envio de alertas:** destinos Webhook HTTP, WhatsApp/Evolution API e Discord.
+- **Workspace:** nome do workspace ativo, criar workspaces, cadastrar usuários e gerar convite copiável.
 
-A aba **Envio de alertas** começa vazia e só cria um formulário ao clicar em **Adicionar destino**. O atalho **Documentação** abre os guias públicos do projeto no GitHub.
+A aba **Envio de alertas** começa vazia até **Adicionar destino**. **Documentação** abre os guias no GitHub.
 
-Campos secretos sempre chegam vazios ao navegador. Deixá-los vazios ao salvar preserva o valor atual.
-
-Variáveis disponíveis:
+Campos secretos chegam vazios ao navegador. Deixá-los vazios ao salvar preserva o valor atual.
 
 | Variável | Padrão | Uso |
 |---|---|---|
 | `HOST` | `127.0.0.1` | Interface de rede do servidor. |
 | `PORT` | `8787` | Porta HTTP. |
-| `N8N_MONITOR_DATA_DIR` | diretório do usuário | Local do SQLite e arquivos persistidos. |
-| `BETTER_AUTH_SECRET` | gerado em desenvolvimento | Segredo de sessão (obrigatório em produção, 32+ caracteres). |
+| `N8N_MONITOR_DATA_DIR` | diretório do usuário | Local do SQLite (e JSON legado, se houver). |
+| `BETTER_AUTH_SECRET` | gerado em desenvolvimento | Segredo de sessão (obrigatório em produção, 32+). |
 | `BETTER_AUTH_URL` | inferido do pedido | URL pública do painel, ex. `https://monitor.exemplo.com`. |
-| `N8N_BASE_URL` | `http://localhost:5678` | Semeia a primeira instância. |
-| `N8N_API_KEY` | vazio | Semeia a chave da primeira instância. |
+| `N8N_BASE_URL` | `http://localhost:5678` | Semeia a primeira instância só no import/setup inicial. |
+| `N8N_API_KEY` | vazio | Semeia a chave só no import/setup inicial. |
 
-Dados ficam em `%LOCALAPPDATA%\n8n-monitor` no Windows, `$HOME/n8n-monitor` em outros sistemas ou no diretório definido pela variável. O banco é `n8n-monitor.sqlite`.
+Dados: `%LOCALAPPDATA%\n8n-monitor` no Windows, `$HOME/n8n-monitor` nos demais, `/data` no Docker. Arquivo: `n8n-monitor.sqlite`. Lista completa: [docs/2.0/variaveis.md](docs/2.0/variaveis.md).
 
 ## Rotas
 
 | Rota | Tela |
 |---|---|
-| `/login` | Entrar |
 | `/setup` | Primeiro usuário e workspace |
+| `/login` | Entrar |
+| `/aceitar-convite` | Aceitar convite |
+| `/trocar-senha` | Senha obrigatória |
 | `/` | Monitor e Configurações |
-| `/tarefas` | Lista e Kanban de pendências |
+| `/tarefas` | Lista e Kanban |
 | `/dashboard` | Métricas históricas |
 | `/logs` | Busca de execuções |
-| `/api/health` | Health check sem dados sensíveis |
+| `/api/health` | Health check público |
 
 ## Semântica dos alertas
 
-Cada problema possui uma chave estável. Toast, notificação do navegador e som são emitidos uma única vez enquanto essa chave estiver ativa, mesmo que a magnitude aumente ou a página seja recarregada. Quando a fonte responde e confirma que o problema desapareceu, a chave é liberada e uma recorrência futura pode avisar novamente; indisponibilidade da fonte não produz recuperação falsa. **Em análise** move o item para Tarefas e o remove do Monitor; **Resolvido** reconhece a magnitude atual.
+Cada problema tem uma chave estável. Toast, notificação e som disparam uma vez enquanto a chave estiver ativa. Recuperação só com confirmação da fonte. **Em análise** move para Tarefas; **Resolvido** reconhece a magnitude atual.
 
-Cada destino externo mantém uma máquina de estados própria e recebe `opened`, `worsened` e `resolved`. Consulte [docs/arquitetura.md](docs/arquitetura.md) para o schema.
+Cada destino externo tem máquina de estados própria (`opened`, `worsened`, `resolved`). Schema: [docs/arquitetura.md](docs/arquitetura.md).
 
 ## Desenvolvimento
 
@@ -138,11 +166,10 @@ Veja [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) e [CHANGELOG
 
 ## Documentação
 
-- [Guia 2.0.0](docs/2.0/README.md): login, workspaces, SQLite, TypeScript e variáveis de exemplo.
+- [Guia 2.0.0](docs/2.0/README.md): login, workspaces, SQLite, TypeScript e variáveis.
+- [Guia 1.0.0](docs/1.0/README.md) e [release v1.0.0](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0).
 - [AGENTS.md](AGENTS.md): regras para quem altera o código.
-- [Arquitetura](docs/arquitetura.md): componentes, dados, APIs e payloads.
-- [Decisões](docs/decisoes.md): critérios de confiabilidade e anti-spam.
-- [Operação](docs/operacao.md): instalação, segurança e troubleshooting.
+- [Arquitetura](docs/arquitetura.md), [Decisões](docs/decisoes.md), [Operação](docs/operacao.md).
 
 ## Licença
 

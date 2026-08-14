@@ -2,6 +2,8 @@
 
 > **English:** [2.0.0 guide](README.en.md)
 
+**Linha 1.0.0:** [guia 1.0.0](../1.0/README.md) · [release v1.0.0](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0)
+
 Esta pasta documenta a versão **2.0.0**: login, workspaces, TypeScript e SQLite. O aviso antigo “sem autenticação, use só VPN” deixa de valer.
 
 | Parte | Arquivo |

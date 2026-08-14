@@ -2,6 +2,8 @@
 
 > **Português:** [guia 2.0.0](README.md)
 
+**1.0.0 line:** [1.0.0 guide](../1.0/README.en.md) · [v1.0.0 release](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0)
+
 This folder documents version **2.0.0**: login, workspaces, TypeScript, and SQLite. The old “no auth, VPN only” warning no longer applies.
 
 | Part | File |

@@ -4,6 +4,8 @@
 
 2.0.0 turns the dashboard from a login-free Node process with JSON on disk into an authenticated TypeScript server with per-workspace data.
 
+Previous line: [1.0.0 guide](../1.0/README.en.md) · [v1.0.0 release](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0).
+
 ## Before (1.x)
 
 - root `.mjs` files, zero npm dependencies

@@ -4,6 +4,8 @@
 
 A 2.0.0 transforma o painel de um processo Node sem login e JSON em disco em um servidor TypeScript autenticado, com dados isolados por workspace.
 
+Documentação da linha anterior: [guia 1.0.0](../1.0/README.md) · [release v1.0.0](https://github.com/luizrn/n8n-monitor/releases/tag/v1.0.0).
+
 ## Antes (1.x)
 
 - arquivos `.mjs` na raiz, zero dependências npm

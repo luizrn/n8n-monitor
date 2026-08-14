@@ -21,6 +21,7 @@ const PARES_DOCS: [string, string][] = [
   ['arquitetura.md', 'architecture.en.md'],
   ['operacao.md', 'operations.en.md'],
   ['decisoes.md', 'decisions.en.md'],
+  ['1.0/README.md', '1.0/README.en.md'],
 ]
 
 async function existe(rel: string) {
