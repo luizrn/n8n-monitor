@@ -20,6 +20,7 @@ Todas as mudanças relevantes serão registradas aqui. O projeto segue [Keep a C
 ### Alterado
 
 - coleta de fundo passou de 10s fixos para 15s em workspace em uso e 60s em workspace ocioso (sem requisição autenticada há mais de 5 minutos).
+- **Agendamentos** passa a listar apenas fluxos publicados e ativos no n8n, com gatilho de tempo habilitado. O veredito `inativo` deixou de existir; fluxo só de webhook continua fora, e fluxo com webhook e cron continua dentro. Menos ruído na tela e varredura mais curta.
 - chamadas à API do n8n durante a varredura de agendamentos usam timeout de 8s em vez de 25s.
 - `GET /api/state` pode responder `parcial: true` (snapshot anterior) ou `motivo: "coletando"` em vez de esperar sem limite.
 - `PRAGMA busy_timeout = 5000` no SQLite e teto de 45s por socket HTTP.

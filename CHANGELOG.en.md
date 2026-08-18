@@ -20,6 +20,7 @@ All notable changes will be recorded here. The project follows [Keep a Changelog
 ### Changed
 
 - background collection moved from a fixed 10s to 15s for a workspace in use and 60s for an idle one (no authenticated request for over 5 minutes).
+- **Schedules** now lists only workflows published and active in n8n, with an enabled time trigger. The `inativo` verdict is gone; webhook-only workflows stay out, and workflows with both a webhook and a cron stay in. Less noise on screen and a shorter sweep.
 - n8n API calls during the schedule sweep use an 8s timeout instead of 25s.
 - `GET /api/state` may answer `parcial: true` (previous snapshot) or `motivo: "coletando"` instead of waiting without a limit.
 - `PRAGMA busy_timeout = 5000` on SQLite and a 45s cap per HTTP socket.

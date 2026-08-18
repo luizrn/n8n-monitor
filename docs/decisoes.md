@@ -10,6 +10,8 @@ Ausência de execução retida não prova que um agendamento falhou. O comparado
 
 Uma instância offline também não produz zeros: ela gera alerta vermelho com nome e motivo, enquanto as demais continuam sendo coletadas.
 
+A conferência de agendamentos olha só o que pode falhar de verdade: fluxo **publicado e ativo** no n8n, com gatilho de tempo habilitado. Fluxo desligado, nó de gatilho desativado e fluxo disparado apenas por webhook ficam de fora — não há horário previsto para cobrar. Um fluxo com webhook **e** cron entra, avaliado pelo gatilho de tempo.
+
 ## Identidade inclui instância
 
 Workflow e execução podem repetir IDs em servidores diferentes. Chaves, caches, diagnósticos e links incluem `instanciaId`; fluxos homônimos permanecem separados.

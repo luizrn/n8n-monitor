@@ -10,6 +10,8 @@ The absence of a retained execution does not prove that a schedule failed. The c
 
 An offline instance does not produce zeroes either. It creates a red alert with its name and reason while collection continues for other instances.
 
+The schedule check only looks at what can actually fail: a workflow **published and active** in n8n, with an enabled time trigger. Deactivated workflows, disabled trigger nodes, and webhook-only workflows are left out — there is no expected time to hold them to. A workflow with both a webhook **and** a cron is included, judged by its time trigger.
+
 ## Identity includes the instance
 
 Workflow and execution IDs may repeat across servers. Keys, caches, diagnostics, and links include `instanciaId`, keeping workflows with the same name isolated.
