@@ -698,10 +698,13 @@ servidor.requestTimeout = 30000
 servidor.headersTimeout = 15000
 servidor.keepAliveTimeout = 5000
 servidor.maxRequestsPerSocket = 1000
+// requestTimeout so limita a leitura da requisicao. Este e o teto da resposta: rede de
+// seguranca para que nenhuma rota consiga prender uma conexao do navegador para sempre.
+servidor.timeout = 45000
 
 const timerColeta = setInterval(() => {
   coletarWorkspaces().catch((e) => console.error('coleta:', (e as Error).message || e))
-}, 10000)
+}, 15000)
 timerColeta.unref()
 
 await migrarAuth()

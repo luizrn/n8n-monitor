@@ -9,6 +9,7 @@ window.I18n = (() => {
     'Tarefas — Monitor n8n': 'Tasks — n8n Monitor', 'Dashboard — Monitor n8n': 'Dashboard — n8n Monitor',
     'Logs — Monitor n8n': 'Logs — n8n Monitor',
     'carregando': 'loading', 'carregando…': 'loading…', 'Girando manivelas...': 'Turning the cranks...', 'conectando': 'connecting',
+    'coletando': 'collecting',
     'conectado': 'connected', 'painel offline': 'dashboard offline', 'não configurado': 'not configured',
     'sem dados': 'no data', 'tudo ok': 'all good', 'erro': 'error', 'atenção': 'attention',
     'precisa de atenção': 'needs attention', 'precisam de atenção': 'need attention', 'Tudo em ordem': 'All clear',

@@ -35,6 +35,18 @@ Reconhecimento sem fila faria o problema desaparecer da rotina. **Em análise** 
 
 Webhook precisa funcionar sem navegador. Por isso o processo coleta continuamente e as telas apenas leem o snapshot. Esse desenho também evita que cinco abas multipliquem a carga na API do n8n.
 
+## Resposta nunca espera a coleta
+
+Um workspace apontando para um n8n lento contaminava todos os outros: a resposta de `GET /api/state` não tinha prazo, o navegador esgotava as seis conexões por origem e o painel congelava. Três regras evitam isso:
+
+- **Prazo em toda espera.** A resposta desiste da coleta em 20s e devolve o snapshot anterior; a coleta segue em segundo plano.
+- **Cache antigo vale mais que espera.** Agendamentos são servidos do último resultado enquanto uma nova varredura roda em paralelo. Só a primeira varredura de uma instância bloqueia, e mesmo assim com orçamento de 15s.
+- **Trabalho imutável não se repete.** O detalhe de uma execução que falhou não muda depois que ela termina, então fica em cache por `executionId`. Antes, dez execuções com dados completos eram rebaixadas a cada ciclo — o workspace com mais erros era justamente o mais lento.
+
+## Coleta acompanha o uso
+
+O coletor precisa rodar sem navegador para o webhook funcionar, mas não precisa do mesmo ritmo para todo mundo. Workspace tocado nos últimos 5 minutos é coletado a cada 15s; os demais, a cada 60s. Alertas continuam vivos em todos, e a carga contínua sobre a API do n8n cai proporcionalmente ao número de workspaces parados.
+
 ## Segredos nunca voltam ao cliente
 
 Campos de senha vazios significam “manter”. Diagnósticos percorrem objetos e redigem nomes associados a token, senha, cookie, autorização e credencial. O webhook recebe apenas o contrato público do alerta.

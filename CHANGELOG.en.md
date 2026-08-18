@@ -9,6 +9,21 @@ All notable changes will be recorded here. The project follows [Keep a Changelog
 - Workspace tab laid out in blocks, with a field to rename the active workspace.
 - a new workspace no longer inherits config, tokens, or connections from legacy JSON or another workspace.
 
+### Fixed
+
+- **workspace switching stuck on "Turning the cranks..."**: `GET /api/state` had no response deadline. With a slow n8n, dashboard requests piled up until the browser's per-origin connection limit was exhausted and the whole page froze — including for users on a different workspace.
+- failed execution details are now cached by `executionId`. Previously up to ten executions were downloaded with full data, sequentially, on every collection cycle — making the workspace with the most errors the slowest one.
+- the schedule sweep got a 15s budget and is now served from the previous cache while revalidating. Previously 40 workflows in sequence with a 25s per-call timeout could hold the response for minutes.
+- the collection cycle no longer overlaps itself, and the workflow list is shared between names and schedules, with an in-flight lock.
+- tasks and webhook state are no longer re-read from SQLite every cycle; that re-read could discard a change made between the in-memory mutation and its write.
+
+### Changed
+
+- background collection moved from a fixed 10s to 15s for a workspace in use and 60s for an idle one (no authenticated request for over 5 minutes).
+- n8n API calls during the schedule sweep use an 8s timeout instead of 25s.
+- `GET /api/state` may answer `parcial: true` (previous snapshot) or `motivo: "coletando"` instead of waiting without a limit.
+- `PRAGMA busy_timeout = 5000` on SQLite and a 45s cap per HTTP socket.
+
 ## [2.0.0] — 2026-08-13
 
 ### Added

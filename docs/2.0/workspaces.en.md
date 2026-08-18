@@ -11,12 +11,14 @@ A workspace is a Better Auth **organization**. The session stores `activeOrganiz
 - alert destinations (webhook, Evolution, Discord)
 - language, theme, stuck-execution limits
 - tasks, acknowledgements, webhook anti-spam state
-- cache and collector (`Map<organizationId, cache>`)
+- cache and collector (`Map<organizationId, cache>`), each workspace on its own cadence
 - n8n clients keyed by `orgId + instanciaId`
 
 ## Selector
 
 The top bar on Monitor, Tasks, Dashboard, and Logs lists the user’s workspaces. Switching calls `POST /api/workspace/ativar`.
+
+Workspaces are collected independently and none waits on another: a slow n8n in one workspace does not delay switching to or reading the others. The active workspace is collected every 15s; those nobody has opened in the last 5 minutes every 60s — enough to keep alerts and webhooks running. When entering an idle workspace, the first read may come back flagged partial while the collection finishes.
 
 ## Create
 

@@ -11,12 +11,14 @@ Um workspace é uma **organization** do Better Auth. A sessão guarda `activeOrg
 - destinos de alerta (webhook, Evolution, Discord)
 - idioma, tema, limites de execução travada
 - tarefas, reconhecimentos, estado anti-spam do webhook
-- cache e coletor (`Map<organizationId, cache>`)
+- cache e coletor (`Map<organizationId, cache>`), com cadência própria por workspace
 - clientes n8n chaveados por `orgId + instanciaId`
 
 ## Seletor
 
 O topo de Monitor, Tarefas, Dashboard e Logs lista os workspaces do usuário. Trocar chama `POST /api/workspace/ativar`.
+
+Workspaces são coletados de forma independente e nenhum espera pelo outro: um n8n lento em um workspace não atrasa a troca nem a leitura dos demais. O workspace ativo é coletado a cada 15s; os que ninguém abriu nos últimos 5 minutos, a cada 60s — o suficiente para manter alertas e webhooks. Ao entrar em um workspace ocioso, a primeira leitura pode vir marcada como parcial enquanto a coleta termina.
 
 ## Criar
 

@@ -35,6 +35,18 @@ Acknowledgement without a queue would remove work from the operator's routine. *
 
 External delivery must work without a browser. The process collects continuously while screens only read snapshots. This also prevents multiple tabs from multiplying n8n API traffic.
 
+## Responses never wait on collection
+
+One workspace pointing at a slow n8n contaminated every other one: the `GET /api/state` response had no deadline, the browser exhausted its six connections per origin, and the dashboard froze. Three rules prevent that:
+
+- **Every wait has a deadline.** The response gives up on the collection after 20s and returns the previous snapshot; the collection keeps running in the background.
+- **A stale cache beats a wait.** Schedules are served from the last result while a fresh sweep runs alongside. Only an instance's very first sweep blocks, and even then within a 15s budget.
+- **Immutable work is not repeated.** The detail of a failed execution cannot change once it has finished, so it is cached by `executionId`. Previously ten full execution payloads were downloaded every cycle — making the workspace with the most errors the slowest one.
+
+## Collection follows usage
+
+The collector must run without a browser for webhooks to work, but it does not need the same cadence for everyone. A workspace touched in the last 5 minutes is collected every 15s; the rest every 60s. Alerts stay alive in all of them, and continuous load on the n8n API drops in proportion to the number of idle workspaces.
+
 ## Secrets never return to the client
 
 Empty password fields mean "keep the current value." Diagnostics recursively redact names associated with tokens, passwords, cookies, authorization, and credentials. External channels receive only the public alert contract.

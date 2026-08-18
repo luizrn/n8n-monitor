@@ -169,7 +169,27 @@ function render(){if(!ultimo)return;const A=(ultimo.alertas||[]).filter(pertence
 function resumoConexoes(){const n8n=(ultimo.instancias||[]).filter(i=>i.ativo&&i.alcancavel).length,u=ultimo.uptime,kuma=u?.ok?(u.monitores||[]).filter(m=>m.ativo).length:null;const n8nTexto=n8n===1?'1 instância n8n conectada':n8n?`${n8n} instâncias n8n conectadas`:'Nenhuma instância n8n conectada',kumaTexto=kuma==null?'Uptime Kuma indisponível':`Uptime Kuma (${kuma} monitores)`;return `<div class="vazio-servicos"><div class="servico-conectado ${n8n?'':'inativo'}"><i></i><span>${esc(tr(n8nTexto))}</span></div><div class="servico-conectado ${kuma==null?'inativo':''}"><i></i><span>${esc(tr(kumaTexto))}</span></div></div>`}
 function renderUptime(u){if(!u?.ok){$('#uptime').innerHTML=`<div class="sub2">${u?.motivo==='desligado'?'Integração desativada.':'Sem dados do Uptime Kuma.'}</div>`;return}$('#uptime').innerHTML='<div class="nums uptime-resumo">'+Object.keys(ROT).map(k=>`<div class="num ${k}"><div class="r">${ROT[k]}</div><div class="v">${nf(u.resumo?.[k])}</div></div>`).join('')+'</div>';$('#uptimeObs').textContent=`${u.monitores.filter(m=>m.ativo).length} ativos · expiração avisada em ${u.limiteCertDias} dias`;$('#tbUptime').innerHTML='<thead><tr><th>Serviço</th><th>Status</th><th>Uptime 24h</th><th>Resposta</th><th>TLS</th><th>Domínio</th></tr></thead><tbody>'+u.monitores.filter(m=>m.ativo).map(m=>{const dom=(u.dominios||[]).find(d=>m.alvo?.includes(d.dominio));return `<tr><td>${esc(m.nome)}<div class="sub2">${esc(m.alvo||m.tipo||'')}</div></td><td><span class="estado"><i class="dot ${m.situacao}"></i>${ROT[m.situacao]}</span></td><td>${m.uptime24==null?'—':(m.uptime24*100).toFixed(2)+'%'}</td><td>${m.respostaMs==null?'—':m.respostaMs+'ms'}</td><td>${m.certDias==null?'—':m.certDias+'d'}</td><td>${dom?dom.dias+'d':'—'}</td></tr>`}).join('')+'</tbody>'}
 function renderCron(c){if(!c?.ok){$('#cronResumo').innerHTML='<span class="sub2">Sem dados.</span>';return}const n={};c.linhas.forEach(x=>n[x.veredito]=(n[x.veredito]||0)+1);$('#cronResumo').innerHTML='<div class="cron-resumo">'+Object.entries(n).map(([k,v])=>`<span><b>${v}</b> ${esc(tr(k))}</span>`).join('')+'</div>';$('#tbCron').innerHTML='<thead><tr><th>Instância</th><th>Fluxo / nó</th><th>Regra</th><th>Prev.</th><th>Cumpr.</th><th>Situação</th></tr></thead><tbody>'+c.linhas.map(l=>`<tr><td><span class="tag">${esc(l.instancia)}</span></td><td>${esc(l.fluxo)}<div class="sub2">${esc(l.no)}</div></td><td>${esc(l.regra)}</td><td>${l.esperado??'—'}</td><td>${l.cumpridas??'—'}</td><td><span class="tag ${l.veredito==='nunca-executou'?'ruim':l.veredito==='com-falhas'?'atencao':''}">${esc(tr(l.veredito))}</span></td></tr>`).join('')+'</tbody>'}
-async function puxar(force=false){if(pausado)return;try{const d=await(await fetch('/api/state'+(force?'?recarregar=1':''),{cache:'no-store'})).json();if(!d.ok)throw new Error(d.detalhe||d.motivo);ultimo=d;tagsInstancias(d.instancias||[]);render()}catch(e){$('#status').className='ruim';$('#statusNome').textContent='painel offline';$('#titulo').textContent=e.message}}
+let buscaEstado=null
+const LIMITE_ESTADO_MS=25000
+// sem esta guarda o setInterval empilha requisicoes penduradas ate estourar o limite de
+// conexoes por origem do navegador, e a pagina inteira congela em "Girando manivelas..."
+async function puxar(force=false){
+  if(pausado)return
+  if(buscaEstado){if(!force)return;buscaEstado.abort()}
+  const ctrl=new AbortController();buscaEstado=ctrl
+  const prazo=setTimeout(()=>ctrl.abort(),LIMITE_ESTADO_MS)
+  try{
+    const d=await(await fetch('/api/state'+(force?'?recarregar=1':''),{cache:'no-store',signal:ctrl.signal})).json()
+    if(!d.ok&&d.motivo==='coletando'){$('#status').className='atencao';$('#statusNome').textContent='coletando';return}
+    if(!d.ok)throw new Error(d.detalhe||d.motivo)
+    ultimo=d;tagsInstancias(d.instancias||[]);render()
+  }catch(e){
+    if(e.name==='AbortError')return
+    $('#status').className='ruim';$('#statusNome').textContent='painel offline';$('#titulo').textContent=e.message
+  }finally{
+    clearTimeout(prazo);if(buscaEstado===ctrl)buscaEstado=null
+  }
+}
 
 document.addEventListener('click',async ev=>{const b=ev.target.closest('[data-rec]');if(b){const a=ultimo.alertas.find(x=>x.chave===b.dataset.key);const r=await(await fetch('/api/reconhecer',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({chave:a.chave,estado:b.dataset.rec,magnitude:a.magnitude,alerta:a})})).json();if(r.ok){Toaster.fechar(a.chave);await puxar(true)}}const d=ev.target.closest('[data-diag]');if(d){const a=ultimo.alertas.find(x=>x.copiarGrupo===Number(d.dataset.diag));const r=await(await fetch(`/api/execucao?id=${encodeURIComponent(a.executionId)}&instancia=${encodeURIComponent(a.instanciaId)}`)).json();await navigator.clipboard.writeText(r.diagnostico||r.erro||'');d.textContent='Copiado ✓'}const c=ev.target.closest('[data-close]');if(c)document.getElementById(c.dataset.close).close()})
 

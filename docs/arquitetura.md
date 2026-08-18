@@ -19,12 +19,31 @@ Intervalos:
 
 | Fonte | Intervalo | Cache |
 |---|---:|---|
-| Estado n8n | 10s | snapshot completo por 8s |
+| Estado n8n — workspace em uso | 15s | snapshot completo por 8s |
+| Estado n8n — workspace ocioso | 60s | idem |
 | Uptime Kuma | 20s | resposta e seleção de monitores |
-| Agendamentos | 5min | por instância |
+| Agendamentos | 5min | por instância, servido do cache enquanto revalida |
+| Detalhe de execução com erro | — | permanente por `executionId`, 500 por instância |
+| Lista de fluxos | 5min | por instância, compartilhada por nomes e agendamentos |
 | RDAP | 24h | por hostname |
 
-O coletor impede execuções concorrentes. A interface lê o mesmo snapshot e não multiplica chamadas remotas quando há várias abas abertas.
+Um workspace conta como **em uso** quando alguma requisição autenticada tocou nele nos últimos 5 minutos. Fora disso ele continua sendo coletado, só que no ritmo longo — o suficiente para manter alertas e webhooks vivos sem manter a API do n8n sob carga contínua.
+
+O coletor impede execuções concorrentes em três níveis: uma coleta por workspace, uma varredura de agendamentos por instância e um ciclo de fundo por vez. A interface lê o mesmo snapshot e não multiplica chamadas remotas quando há várias abas abertas.
+
+## Prazos
+
+Nenhuma rota espera a coleta indefinidamente.
+
+| Limite | Valor | Efeito ao estourar |
+|---|---:|---|
+| Chamada à API do n8n | 25s | erro naquela chamada |
+| Chamada durante varredura de agendamentos | 8s | o fluxo fica sem execuções nesta rodada |
+| Varredura de agendamentos por instância | 15s | resultado parcial, revalidado em 1min |
+| Espera de `GET /api/state` pela coleta | 20s | devolve o snapshot anterior com `parcial: true`, ou `motivo: "coletando"` |
+| Socket HTTP | 45s | rede de segurança do servidor |
+
+A coleta que estoura o prazo **não** é cancelada: ela termina em segundo plano e preenche o cache para a próxima leitura.
 
 ## Módulos
 

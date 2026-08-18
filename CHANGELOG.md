@@ -9,6 +9,21 @@ Todas as mudanças relevantes serão registradas aqui. O projeto segue [Keep a C
 - aba Workspace reorganizada, com campo para renomear o workspace ativo.
 - workspace novo não herda config, tokens nem conexões do JSON legado nem de outro workspace.
 
+### Corrigido
+
+- **troca de workspace travando em "Girando manivelas..."**: `GET /api/state` não tinha prazo de resposta. Com um n8n lento, as requisições do painel se acumulavam até esgotar o limite de conexões por origem do navegador e congelar a página inteira, inclusive para quem estava em outro workspace.
+- detalhe de execução com erro passa a ser guardado por `executionId`. Antes, até dez execuções eram baixadas com dados completos, em série, a cada ciclo de coleta — o workspace com mais erros era o mais lento.
+- varredura de agendamentos ganhou orçamento de 15s e passa a ser servida do cache anterior enquanto revalida. Antes, 40 fluxos em série com timeout de 25s por chamada podiam segurar a resposta por minutos.
+- ciclo de coleta não se sobrepõe mais a si mesmo, e a lista de fluxos é compartilhada entre nomes e agendamentos, com trava de chamada em curso.
+- tarefas e estado do webhook deixam de ser relidos do SQLite a cada ciclo; a releitura podia descartar uma alteração feita entre a mutação em memória e a gravação.
+
+### Alterado
+
+- coleta de fundo passou de 10s fixos para 15s em workspace em uso e 60s em workspace ocioso (sem requisição autenticada há mais de 5 minutos).
+- chamadas à API do n8n durante a varredura de agendamentos usam timeout de 8s em vez de 25s.
+- `GET /api/state` pode responder `parcial: true` (snapshot anterior) ou `motivo: "coletando"` em vez de esperar sem limite.
+- `PRAGMA busy_timeout = 5000` no SQLite e teto de 45s por socket HTTP.
+
 ## [2.0.0] — 2026-08-13
 
 ### Adicionado

@@ -21,6 +21,8 @@ mkdirSync(DIR_DADOS, { recursive: true })
 export const db = new DatabaseSync(ARQ_SQLITE)
 db.exec('PRAGMA journal_mode = WAL')
 db.exec('PRAGMA foreign_keys = ON')
+// backup ou segundo processo tocando o arquivo nao vira erro imediato de banco ocupado
+db.exec('PRAGMA busy_timeout = 5000')
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS workspace_config (

@@ -37,4 +37,8 @@ and copies them into that `organization_id`. A new workspace starts empty: no in
 
 ## Collector
 
-About every 10s the collector walks **all** workspaces, refreshes the in-memory snapshot, and dispatches webhooks. `GET /api/state` and the other APIs read only the session workspace.
+Every 15s the collector walks **all** workspaces, refreshes the in-memory snapshot, and dispatches webhooks. Each workspace has its own cadence: 15s while someone is using it, 60s while idle (no authenticated request in the last 5 minutes). A cycle starts only after the previous one finishes.
+
+`GET /api/state` and the other APIs read only the session workspace. The response waits at most 20s for the collection; past that deadline it returns the previous snapshot flagged `parcial: true` — or `{ "ok": false, "motivo": "coletando" }` on a workspace's first read — while the collection finishes in the background.
+
+Tasks and webhook anti-spam state are read from SQLite **once** per workspace, when the runtime is created. From then on memory is the source of truth and every change is written immediately.

@@ -17,12 +17,31 @@ IANA/RDAP -+                                     +-- external channels
 
 | Source | Interval | Cache |
 |---|---:|---|
-| n8n state | 10s | full snapshot for 8s |
+| n8n state — workspace in use | 15s | full snapshot for 8s |
+| n8n state — idle workspace | 60s | same |
 | Uptime Kuma | 20s | response and monitor selection |
-| Schedules | 5min | per instance |
+| Schedules | 5min | per instance, served from cache while revalidating |
+| Failed execution detail | — | permanent per `executionId`, 500 per instance |
+| Workflow list | 5min | per instance, shared by names and schedules |
 | RDAP | 24h | per hostname |
 
-Collectors prevent overlapping runs. Every open UI tab reads the same snapshot, so additional tabs do not multiply calls to remote APIs.
+A workspace counts as **in use** when an authenticated request touched it within the last 5 minutes. Otherwise it is still collected, just on the long interval — enough to keep alerts and webhooks alive without keeping the n8n API under continuous load.
+
+Collectors prevent overlapping runs at three levels: one collection per workspace, one schedule sweep per instance, and one background cycle at a time. Every open UI tab reads the same snapshot, so additional tabs do not multiply calls to remote APIs.
+
+## Deadlines
+
+No route waits for a collection indefinitely.
+
+| Limit | Value | Effect when exceeded |
+|---|---:|---|
+| n8n API call | 25s | that call fails |
+| Call during a schedule sweep | 8s | that workflow has no executions this round |
+| Schedule sweep per instance | 15s | partial result, revalidated in 1min |
+| `GET /api/state` waiting on collection | 20s | returns the previous snapshot with `parcial: true`, or `motivo: "coletando"` |
+| HTTP socket | 45s | server-side safety net |
+
+A collection that exceeds its deadline is **not** cancelled: it finishes in the background and fills the cache for the next read.
 
 ## Modules
 

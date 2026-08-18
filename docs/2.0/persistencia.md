@@ -37,4 +37,8 @@ e copia para aquele `organization_id`. Workspace novo nasce vazio: sem instânci
 
 ## Coletor
 
-A cada ~10s o coletor percorre **todos** os workspaces, atualiza o snapshot em memória e dispara webhooks. `GET /api/state` e o restante das APIs leem só o workspace da sessão.
+A cada 15s o coletor percorre **todos** os workspaces, atualiza o snapshot em memória e dispara webhooks. Cada workspace tem cadência própria: 15s enquanto alguém o usa, 60s quando está ocioso (nenhuma requisição autenticada nos últimos 5 minutos). Um ciclo só começa quando o anterior termina.
+
+`GET /api/state` e o restante das APIs leem só o workspace da sessão. A resposta espera no máximo 20s pela coleta; passado esse prazo ela devolve o snapshot anterior marcado com `parcial: true` — ou `{ "ok": false, "motivo": "coletando" }` na primeira leitura de um workspace — enquanto a coleta termina em segundo plano.
+
+Tarefas e estado anti-spam do webhook são lidos do SQLite **uma vez** por workspace, na criação do runtime. Depois disso a memória é a fonte da verdade e cada alteração é gravada na hora.

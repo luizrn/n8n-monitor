@@ -3,7 +3,7 @@ import {
   chaveLimite, instanciasAtivas, instanciaPorId, publica, saneaInstancia,
 } from './config.js'
 import { gatilhosDe, regraParaCron, descreverRegra, esperadas, comparar } from './cron.js'
-import { clienteDe, criarCliente } from './instancias.js'
+import { acharFalha, clienteDe, criarCliente, TEMPO_LIMITE_CURTO_MS } from './instancias.js'
 import { criarResolvedorRdap } from './rdap.js'
 import { redigir, redigirTexto } from './seguranca.js'
 import { coletarUptime } from './uptime.js'
@@ -12,10 +12,15 @@ import type { RepoTarefas } from './tarefas.js'
 import type { DispatcherWebhook } from './webhook.js'
 
 const JANELA_MS = 3600000
+// teto do que uma resposta HTTP espera pela coleta; o que passar disso termina em segundo plano
+const LIMITE_RESPOSTA_MS = 20000
+const VALIDADE_CRON_MS = 300000
+const VALIDADE_CRON_PARCIAL_MS = 60000
+const ORCAMENTO_CRON_MS = 15000
 const ehErro = (s: string) => s === 'error' || s === 'crashed'
 const ORDEM_VER: Record<string, number> = {
   'nunca-executou': 0, 'com-falhas': 1, 'sem-dados': 2, 'nao-comparavel': 3,
-  ok: 4, 'sem-janela': 5, inativo: 6,
+  ok: 4, 'sem-janela': 5,
 }
 
 export type Runtime = {
@@ -24,8 +29,11 @@ export type Runtime = {
   reconhecimentos: Record<string, Reconhecimento>
   repoTarefas: RepoTarefas
   webhook: DispatcherWebhook
+  pronto: Promise<void>
+  ultimoUso: number
   cacheCompleto: { em: number; dados: Record<string, unknown> | null }
-  cacheCron: Map<string, { em: number; linhas: Record<string, unknown>[] }>
+  cacheCron: Map<string, { em: number; linhas: Record<string, unknown>[]; parcial: boolean }>
+  cronEmCurso: Map<string, Promise<Record<string, unknown>[]>>
   cacheUptime: { em: number; dados: Record<string, unknown> | null }
   coletaEmCurso: Promise<Record<string, unknown>> | null
 }
@@ -34,15 +42,6 @@ const rdap = criarResolvedorRdap()
 
 function limiteTravadaDe(rt: Runtime, instanciaId: string, workflowId: string) {
   return rt.config.limitesTravada[chaveLimite(instanciaId, workflowId)] ?? rt.config.limiteTravadaMin
-}
-
-function acharFalha(runData: Record<string, { error?: { message?: string }; executionTime?: number }[] | undefined> | undefined) {
-  for (const [no, execs] of Object.entries(runData || {})) {
-    for (const ex of execs || []) {
-      if (ex?.error) return { no, erro: ex.error, tempo: ex.executionTime }
-    }
-  }
-  return null
 }
 
 async function agruparErros(cli: ReturnType<typeof clienteDe>, lista: { workflowId: string; startedAt?: string; id: string; mode?: string }[], todasRecentes: { workflowId: string; status?: string; startedAt?: string; id: string }[] = []) {
@@ -58,29 +57,20 @@ async function agruparErros(cli: ReturnType<typeof clienteDe>, lista: { workflow
     (a, b) => new Date(b.execs[0].startedAt || 0).getTime() - new Date(a.execs[0].startedAt || 0).getTime()
   )
 
+  // detalhe vem do cache por execucao no cliente: repeticoes entre ciclos nao custam requisicao
   const MAX_DETALHE = 10
-  const saida = []
-  for (const [i, g] of grupos.entries()) {
+  return Promise.all(grupos.map(async (g, i) => {
     const novo = g.execs[0]
-    let no: string | null = null, mensagem: string | null = null
-    if (i < MAX_DETALHE) {
-      try {
-        const ex = await cli.chamar(`/api/v1/executions/${novo.id}?includeData=true`) as {
-          data?: { resultData?: { runData?: Record<string, { error?: { message?: string } }[]>; error?: { message?: string }; lastNodeExecuted?: string } }
-        }
-        const rd = ex?.data?.resultData
-        const f = acharFalha(rd?.runData) || (rd?.error ? { no: rd.lastNodeExecuted, erro: rd.error } : null)
-        no = f?.no ?? rd?.lastNodeExecuted ?? null
-        mensagem = (f?.erro as { message?: string } | undefined)?.message ?? null
-      } catch { /* segue sem detalhe */ }
-    }
+    const { no, mensagem } = i < MAX_DETALHE
+      ? await cli.detalheDeErro(novo.id)
+      : { no: null, mensagem: null }
     const instanteErro = new Date(novo.startedAt || 0).getTime()
     const sucessoDepois = todasRecentes.find(
       (e) => e.workflowId === g.workflowId && e.status === 'success'
         && e.startedAt && new Date(e.startedAt).getTime() > instanteErro
     )
 
-    saida.push({
+    return {
       instanciaId: inst.id,
       instancia: inst.nome,
       chave: `erro:${inst.id}:${g.workflowId}:${no || ''}`,
@@ -96,9 +86,8 @@ async function agruparErros(cli: ReturnType<typeof clienteDe>, lista: { workflow
       primeiro: g.execs[g.execs.length - 1].startedAt,
       modo: novo.mode,
       detalheOmitido: i >= MAX_DETALHE,
-    })
-  }
-  return saida
+    }
+  }))
 }
 
 async function estadoDaInstancia(rt: Runtime, inst: Config['instancias'][number], agora: number) {
@@ -231,29 +220,39 @@ async function montarEstado(rt: Runtime) {
   }
 }
 
-async function cronDaInstancia(rt: Runtime, inst: Config['instancias'][number]) {
-  const guardado = rt.cacheCron.get(inst.id)
-  if (guardado && Date.now() - guardado.em < 300000) return guardado.linhas
-
+async function calcularCron(rt: Runtime, inst: Config['instancias'][number]) {
   const cli = clienteDe(inst, rt.orgId)
-  const wfs = await cli.chamar('/api/v1/workflows?limit=250') as { data?: { id: string; name: string; active?: boolean; settings?: { timezone?: string }; nodes?: unknown[] }[] }
+  const wfs = await cli.listarFluxos()
   const fim = Date.now()
   const inicio = fim - rt.config.horasCron * 3600000
+  // a varredura e sequencial por fluxo; sem teto, uma instancia lenta segurava a coleta por minutos
+  const prazo = fim + ORCAMENTO_CRON_MS
 
+  // so entra fluxo publicado e ligado no n8n, com gatilho de tempo habilitado: conferir
+  // agendamento de fluxo desligado nao diz nada. gatilhosDe reconhece apenas schedule/cron/
+  // interval, entao fluxo so de webhook fica de fora sozinho e um com webhook + cron entra.
   const alvos = []
-  for (const wf of wfs.data || []) {
+  for (const wf of wfs) {
+    if (!wf.active) continue
     const gats = gatilhosDe(wf as { nodes?: { name?: string; type?: string; disabled?: boolean; parameters?: Record<string, unknown> }[] })
+      .filter((g) => !g.desativado)
     if (gats.length) alvos.push({ wf, gats })
   }
 
+  // parcial marca so o corte por tempo: e o unico caso em que revalidar cedo traz mais dados.
+  // O teto de 40 fluxos e limite de projeto, e repetir a varredura nao o eleva.
   const linhas: Record<string, unknown>[] = []
+  let parcial = false
   for (const { wf, gats } of alvos.slice(0, 40)) {
+    if (Date.now() > prazo) { parcial = true; break }
     const tz = wf.settings?.timezone && wf.settings.timezone !== 'DEFAULT'
       ? wf.settings.timezone : rt.config.fuso
 
     let execs: { id: string; startedAt?: string; mode?: string }[] = []
     try {
-      const pg = await cli.paginarExecucoes(`workflowId=${encodeURIComponent(wf.id)}`, { paginas: 3, ate: inicio })
+      const pg = await cli.paginarExecucoes(`workflowId=${encodeURIComponent(wf.id)}`, {
+        paginas: 3, ate: inicio, tempoLimiteMs: TEMPO_LIMITE_CURTO_MS,
+      })
       execs = pg.itens
         .filter((e) => e.startedAt && new Date(e.startedAt).getTime() >= inicio)
         .filter((e) => e.mode === 'trigger' || e.mode === 'scheduled')
@@ -284,12 +283,11 @@ async function cronDaInstancia(rt: Runtime, inst: Config['instancias'][number]) 
         continue
       }
 
-      const inativo = !wf.active || g.desativado
       const horizonte = execs.length
         ? Math.max(inicio, new Date(execs[0].startedAt || 0).getTime())
         : null
 
-      if (!inativo && horizonte === null) {
+      if (horizonte === null) {
         linhas.push({
           ...comum,
           veredito: 'sem-dados',
@@ -302,14 +300,13 @@ async function cronDaInstancia(rt: Runtime, inst: Config['instancias'][number]) 
         continue
       }
 
-      const de = inativo ? inicio : horizonte as number
+      const de = horizonte
       const ocor = esperadas(campos, tz, de, fim)
       const cobraveis = ocor.filter((o) => fim - o.getTime() > rt.config.toleranciaMin * 60000)
       const cmp = comparar(cobraveis, execs as { id: string; startedAt: string }[], rt.config.toleranciaMin)
 
       let veredito = 'ok'
-      if (inativo) veredito = 'inativo'
-      else if (cobraveis.length === 0) veredito = 'sem-janela'
+      if (cobraveis.length === 0) veredito = 'sem-janela'
       else if (cmp.cumpridas.length === 0) veredito = 'nunca-executou'
       else if (cmp.perdidas.length) veredito = 'com-falhas'
 
@@ -317,7 +314,7 @@ async function cronDaInstancia(rt: Runtime, inst: Config['instancias'][number]) 
       linhas.push({
         ...comum,
         veredito,
-        janelaVerificadaHoras: inativo ? null : Number(((fim - de) / 3600000).toFixed(1)),
+        janelaVerificadaHoras: Number(((fim - de) / 3600000).toFixed(1)),
         esperado: cobraveis.length,
         cumpridas: cmp.cumpridas.length,
         perdidas: cmp.perdidas.slice(-12),
@@ -330,8 +327,31 @@ async function cronDaInstancia(rt: Runtime, inst: Config['instancias'][number]) 
     }
   }
 
-  rt.cacheCron.set(inst.id, { em: Date.now(), linhas })
+  rt.cacheCron.set(inst.id, { em: Date.now(), linhas, parcial })
   return linhas
+}
+
+function atualizarCron(rt: Runtime, inst: Config['instancias'][number]) {
+  const emCurso = rt.cronEmCurso.get(inst.id)
+  if (emCurso) return emCurso
+  const calculo = calcularCron(rt, inst)
+  rt.cronEmCurso.set(inst.id, calculo)
+  const limpar = () => { if (rt.cronEmCurso.get(inst.id) === calculo) rt.cronEmCurso.delete(inst.id) }
+  calculo.then(limpar, limpar)
+  return calculo
+}
+
+async function cronDaInstancia(rt: Runtime, inst: Config['instancias'][number]) {
+  const guardado = rt.cacheCron.get(inst.id)
+  const validade = guardado?.parcial ? VALIDADE_CRON_PARCIAL_MS : VALIDADE_CRON_MS
+  if (guardado && Date.now() - guardado.em < validade) return guardado.linhas
+  const atualizacao = atualizarCron(rt, inst)
+  // com resultado anterior em maos, devolve na hora e deixa a revalidacao terminar sozinha
+  if (guardado) {
+    atualizacao.catch(() => {})
+    return guardado.linhas
+  }
+  return atualizacao
 }
 
 export async function conferirAgendamentos(rt: Runtime) {
@@ -348,6 +368,7 @@ export async function conferirAgendamentos(rt: Runtime) {
     janelaHoras: rt.config.horasCron,
     toleranciaMin: rt.config.toleranciaMin,
     fusoPadrao: rt.config.fuso,
+    parcial: ativas.some((inst) => rt.cacheCron.get(inst.id)?.parcial === true),
     linhas,
   }
 }
@@ -362,49 +383,70 @@ export async function uptimeAtual(rt: Runtime, forcar = false) {
   return d
 }
 
-export async function coletarCompleto(rt: Runtime, forcar = false) {
+async function executarColeta(rt: Runtime, forcar: boolean): Promise<Record<string, unknown>> {
+  const [estado, cron, uptime] = await Promise.all([
+    montarEstado(rt),
+    conferirAgendamentos(rt).catch((e) => ({ ok: false, motivo: 'erro', detalhe: String((e as Error).message || e), linhas: [] })),
+    uptimeAtual(rt, forcar).catch((e) => ({ ok: false, motivo: 'erro', detalhe: String((e as Error).message || e) })),
+  ])
+  const alertasAtivos = montarAlertas(estado as Parameters<typeof montarAlertas>[0], cron, uptime)
+  const chaves = new Set(alertasAtivos.map((a) => String(a.chave)))
+  const podeResolver = (item: { chave?: string; origem?: string | null; instanciaId?: string | null }) =>
+    podeConfirmarRecuperacao({ chave: item.chave, origem: item.origem || undefined, instanciaId: item.instanciaId || undefined }, estado, uptime)
+
+  let limpou = false
+  for (const chave of Object.keys(rt.reconhecimentos)) {
+    const reconhecimento = { chave, ...rt.reconhecimentos[chave] }
+    const tarefa = rt.repoTarefas.pegar(chave)
+    if (!chaves.has(chave) && podeResolver({ ...tarefa, ...reconhecimento })) {
+      delete rt.reconhecimentos[chave]
+      limpou = true
+    }
+  }
+  if (limpou) {
+    const { salvarReconhecimentosOrg } = await import('./persistencia.js')
+    salvarReconhecimentosOrg(rt.orgId, rt.reconhecimentos)
+  }
+  await rt.repoTarefas.resolverAusentes(chaves, (t) => podeResolver(t))
+
+  const alertas = alertasAtivos.filter((a) => {
+    const r = rt.reconhecimentos[String(a.chave)]
+    return !r || Number(a.magnitude || 1) > Number(r.magnitude || 1)
+  })
+  const dados = {
+    ...estado, cron, uptime, alertas, alertasAtivos: alertasAtivos.length,
+    reconhecimentos: rt.reconhecimentos, tarefasAtivas: rt.repoTarefas.chavesAtivas(),
+    tarefasContagem: rt.repoTarefas.contagem(),
+  }
+  rt.cacheCompleto = { em: Date.now(), dados }
+  rt.webhook.processar(alertasAtivos as Record<string, unknown>[], podeResolver).catch((e) => console.error('webhook:', (e as Error).message || e))
+  return dados
+}
+
+// nunca segura a resposta HTTP indefinidamente: passado o prazo devolve o snapshot anterior
+// (ou avisa que esta coletando) enquanto a coleta continua em segundo plano.
+async function esperarColeta(rt: Runtime, coleta: Promise<Record<string, unknown>>): Promise<Record<string, unknown>> {
+  let temporizador: ReturnType<typeof setTimeout> | undefined
+  const prazo = new Promise<null>((ok) => { temporizador = setTimeout(() => ok(null), LIMITE_RESPOSTA_MS) })
+  try {
+    const dados = await Promise.race([coleta, prazo])
+    if (dados) return dados
+    if (rt.cacheCompleto.dados) return { ...rt.cacheCompleto.dados, parcial: true }
+    return { ok: false, motivo: 'coletando' }
+  } finally {
+    clearTimeout(temporizador)
+  }
+}
+
+export async function coletarCompleto(rt: Runtime, forcar = false): Promise<Record<string, unknown>> {
   if (!forcar && rt.cacheCompleto.dados && Date.now() - rt.cacheCompleto.em < 8000) return rt.cacheCompleto.dados
-  if (rt.coletaEmCurso) return rt.coletaEmCurso
-  rt.coletaEmCurso = (async () => {
-    const [estado, cron, uptime] = await Promise.all([
-      montarEstado(rt),
-      conferirAgendamentos(rt).catch((e) => ({ ok: false, motivo: 'erro', detalhe: String((e as Error).message || e), linhas: [] })),
-      uptimeAtual(rt, forcar).catch((e) => ({ ok: false, motivo: 'erro', detalhe: String((e as Error).message || e) })),
-    ])
-    const alertasAtivos = montarAlertas(estado as Parameters<typeof montarAlertas>[0], cron, uptime)
-    const chaves = new Set(alertasAtivos.map((a) => String(a.chave)))
-    const podeResolver = (item: { chave?: string; origem?: string | null; instanciaId?: string | null }) =>
-      podeConfirmarRecuperacao({ chave: item.chave, origem: item.origem || undefined, instanciaId: item.instanciaId || undefined }, estado, uptime)
-
-    let limpou = false
-    for (const chave of Object.keys(rt.reconhecimentos)) {
-      const reconhecimento = { chave, ...rt.reconhecimentos[chave] }
-      const tarefa = rt.repoTarefas.pegar(chave)
-      if (!chaves.has(chave) && podeResolver({ ...tarefa, ...reconhecimento })) {
-        delete rt.reconhecimentos[chave]
-        limpou = true
-      }
-    }
-    if (limpou) {
-      const { salvarReconhecimentosOrg } = await import('./persistencia.js')
-      salvarReconhecimentosOrg(rt.orgId, rt.reconhecimentos)
-    }
-    await rt.repoTarefas.resolverAusentes(chaves, (t) => podeResolver(t))
-
-    const alertas = alertasAtivos.filter((a) => {
-      const r = rt.reconhecimentos[String(a.chave)]
-      return !r || Number(a.magnitude || 1) > Number(r.magnitude || 1)
-    })
-    const dados = {
-      ...estado, cron, uptime, alertas, alertasAtivos: alertasAtivos.length,
-      reconhecimentos: rt.reconhecimentos, tarefasAtivas: rt.repoTarefas.chavesAtivas(),
-      tarefasContagem: rt.repoTarefas.contagem(),
-    }
-    rt.cacheCompleto = { em: Date.now(), dados }
-    rt.webhook.processar(alertasAtivos as Record<string, unknown>[], podeResolver).catch((e) => console.error('webhook:', (e as Error).message || e))
-    return dados
-  })()
-  try { return await rt.coletaEmCurso } finally { rt.coletaEmCurso = null }
+  const emCurso = rt.coletaEmCurso
+  if (emCurso) return esperarColeta(rt, emCurso)
+  const coleta = executarColeta(rt, forcar)
+  rt.coletaEmCurso = coleta
+  const limpar = () => { if (rt.coletaEmCurso === coleta) rt.coletaEmCurso = null }
+  coleta.then(limpar, limpar)
+  return esperarColeta(rt, coleta)
 }
 
 export function invalidarEstadoCompleto(rt: Runtime) {
