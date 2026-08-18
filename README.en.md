@@ -149,6 +149,17 @@ Each problem has a stable key. Toast, notification, and sound fire once while th
 
 Each external destination has its own state machine (`opened`, `worsened`, `resolved`). Schema: [docs/architecture.en.md](docs/architecture.en.md).
 
+### Severity colors
+
+| | Severity | Dark | Light | Token | Used for |
+|---|---|---|---|---|---|
+| 🟥 | Error | `#f0745c` | `#bd4337` | `--ruim` | unreachable instance, execution error, monitor DOWN, expired TLS or domain |
+| 🟨 | Attention | `#e8bc4e` | `#946307` | `--atencao` | stuck execution, missed schedule, monitor PENDING, TLS or domain near the limit |
+| 🟩 | All good | `#5cbd8a` | `#287a54` | `--bom` | no active alert, reachable instance, monitor UP |
+| 🟦 | Informational | `#6fa8f5` | `#2869b6` | `--calmo` | neutral counts and volume bars |
+
+Alerts use only two levels: `ruim` and `atencao`. Green and blue are interface states, not severities. Time-series dots use higher-saturation variants (`--pontoRuim`, `--pontoAtencao`, `--pontoBom`). Definitions in [public/base.css](public/base.css); sound plays for red only.
+
 ## Development
 
 ```bash

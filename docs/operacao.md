@@ -34,7 +34,38 @@ Desativar uma instância interrompe a coleta sem apagar sua configuração. Remo
 
 Retenção curta limita Dashboard e auditoria de cron. Ajuste a retenção do n8n conforme o período que deseja observar; o monitor informa a cobertura real.
 
-Sem problemas ativos, o painel mostra a quantidade de instâncias n8n ativas e alcançáveis. Use **Detalhes** no bloco N8N para abrir `/logs` com as execuções coletadas.
+Sem problemas ativos, o painel mostra **Tudo em ordem** com o resumo das conexões: instâncias n8n ativas e alcançáveis e monitores do Uptime Kuma. Use **Detalhes** no bloco N8N para abrir `/logs` com as execuções coletadas.
+
+## Agendamentos
+
+O bloco **Agendamentos** confere se cada gatilho de tempo rodou quando deveria, dentro da janela configurada.
+
+Entram na conferência apenas os fluxos que podem falhar de verdade:
+
+- fluxo **publicado e ativo** no n8n;
+- com nó de gatilho de tempo (`Schedule Trigger`, `Cron` ou `Interval`) **habilitado**.
+
+Ficam de fora fluxo desativado, nó de gatilho desativado e fluxo disparado só por webhook — não há horário previsto para cobrar. Um fluxo com webhook **e** cron entra, avaliado pelo gatilho de tempo.
+
+| Veredito | Significa |
+|---|---|
+| `ok` | todas as ocorrências previstas foram cumpridas |
+| `com-falhas` | rodou, mas perdeu ocorrências na janela |
+| `nunca-executou` | havia ocorrências previstas e nenhuma execução casou |
+| `sem-dados` | nenhuma execução retida na janela: a retenção não permite concluir |
+| `sem-janela` | ainda não há ocorrência vencida além da tolerância |
+| `nao-comparavel` | regra que o avaliador não sabe conferir (por exemplo, intervalo em segundos) |
+
+A varredura cobre até 40 fluxos por instância e tem orçamento de 15 segundos. Estourado o orçamento, o resultado sai parcial e é revalidado em 1 minuto em vez dos 5 normais. O painel nunca espera a varredura: enquanto ela roda, ele mostra o resultado anterior.
+
+## Coleta e desempenho
+
+Cada workspace é coletado por conta própria e nenhum espera pelo outro: um n8n lento em um workspace não atrasa a troca nem a leitura dos demais.
+
+- workspace em uso (alguém abriu nos últimos 5 minutos): coleta a cada 15s;
+- workspace ocioso: a cada 60s, o suficiente para manter alertas e canais externos.
+
+`GET /api/state` espera no máximo 20 segundos pela coleta. Passado esse prazo ele devolve o snapshot anterior, e a coleta termina em segundo plano. Na primeira leitura de um workspace, quando ainda não existe snapshot, o topo mostra **coletando** até a primeira coleta concluir — normalmente no próximo ciclo.
 
 ## Uptime Kuma
 
@@ -108,6 +139,8 @@ Erros frequentes:
 | `HTTP 404` | URL base sem caminho extra |
 | timeout | DNS, proxy, firewall e alcance a partir do host/container |
 | números menores | retenção e limite de paginação indicado na tela |
+| topo preso em **coletando** | primeira coleta do workspace em andamento; se persistir, veja alcance e latência do n8n |
+| **Agendamentos** com menos linhas que o esperado | fluxo despublicado no n8n, nó de gatilho desativado ou fluxo só de webhook |
 | webhook repetido | permissões de escrita no diretório de dados |
 | Kuma sem uptime | métrica indisponível e slug público ausente |
 

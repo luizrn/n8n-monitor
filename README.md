@@ -149,6 +149,17 @@ Cada problema tem uma chave estável. Toast, notificação e som disparam uma ve
 
 Cada destino externo tem máquina de estados própria (`opened`, `worsened`, `resolved`). Schema: [docs/arquitetura.md](docs/arquitetura.md).
 
+### Cores por severidade
+
+| | Severidade | Escuro | Claro | Token | Usada em |
+|---|---|---|---|---|---|
+| 🟥 | Erro | `#f0745c` | `#bd4337` | `--ruim` | instância inalcançável, erro de execução, monitor DOWN, TLS ou domínio expirado |
+| 🟨 | Atenção | `#e8bc4e` | `#946307` | `--atencao` | execução travada, agendamento perdido, monitor PENDING, TLS ou domínio perto do limite |
+| 🟩 | Tudo ok | `#5cbd8a` | `#287a54` | `--bom` | nenhum alerta ativo, instância alcançável, monitor UP |
+| 🟦 | Informativo | `#6fa8f5` | `#2869b6` | `--calmo` | contagens neutras e barras de volume |
+
+Os alertas usam só dois níveis: `ruim` e `atencao`. Verde e azul são estados da interface, não severidades. Os pontos de série temporal têm variantes de maior saturação (`--pontoRuim`, `--pontoAtencao`, `--pontoBom`). Definições em [public/base.css](public/base.css); o som toca somente para vermelho.
+
 ## Desenvolvimento
 
 ```bash

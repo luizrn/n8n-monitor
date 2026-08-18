@@ -23,6 +23,20 @@ All of these screens show `v2.0.0` (`.versao` class). The value comes from `GET 
 
 Workspace selector, user name, and **Sign out**. Changing the selector reloads the page on the new workspace.
 
+## Monitor
+
+The top bar shows a state indicator carrying the most severe open level:
+
+| Indicator | When |
+|---|---|
+| `all good` | no active alert |
+| `attention` | only yellow alerts |
+| `error` | at least one red alert |
+| `collecting` | the workspace's first collection is still running |
+| `dashboard offline` | reading `GET /api/state` failed |
+
+With no active alerts, the center panel shows **All clear** with a badge, headline, and the connections (n8n instances and Uptime Kuma) highlighted for reading at a distance.
+
 ## Workspace tab (Settings)
 
 Separate blocks: current workspace (rename), list + create, users, and invite.

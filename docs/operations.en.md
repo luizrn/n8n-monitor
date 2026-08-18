@@ -34,7 +34,38 @@ Disabling an instance stops collection without deleting configuration. Removing 
 
 Short retention limits Dashboard and schedule auditing. Set n8n retention according to the period you need to inspect; Monitor reports the actual available coverage.
 
-When no problems are active, the dashboard shows the number of active, reachable n8n instances. Select **Details** in the n8n panel to open `/logs` with collected executions.
+When no problems are active, the dashboard shows **All clear** with a connection summary: active, reachable n8n instances and Uptime Kuma monitors. Use **Details** in the N8N block to open `/logs` with the collected executions.
+
+## Schedules
+
+The **Schedules** block checks whether each time trigger ran when it should have, within the configured window.
+
+Only workflows that can actually fail are checked:
+
+- workflow **published and active** in n8n;
+- with an **enabled** time trigger node (`Schedule Trigger`, `Cron`, or `Interval`).
+
+Deactivated workflows, disabled trigger nodes, and webhook-only workflows are left out — there is no expected time to hold them to. A workflow with both a webhook **and** a cron is included, judged by its time trigger.
+
+| Verdict | Meaning |
+|---|---|
+| `ok` | every expected occurrence was met |
+| `com-falhas` | it ran, but missed occurrences in the window |
+| `nunca-executou` | occurrences were expected and no execution matched |
+| `sem-dados` | no execution retained in the window: retention does not allow a conclusion |
+| `sem-janela` | no occurrence is overdue beyond the tolerance yet |
+| `nao-comparavel` | a rule the evaluator cannot check (for example, an interval in seconds) |
+
+The sweep covers up to 40 workflows per instance and has a 15-second budget. Past that budget the result comes back partial and is revalidated in 1 minute instead of the usual 5. The dashboard never waits for the sweep: while it runs, the previous result is shown.
+
+## Collection and performance
+
+Each workspace is collected on its own and none waits for another: a slow n8n in one workspace does not delay switching to or reading the others.
+
+- workspace in use (someone opened it in the last 5 minutes): collected every 15s;
+- idle workspace: every 60s, enough to keep alerts and external channels running.
+
+`GET /api/state` waits at most 20 seconds for the collection. Past that deadline it returns the previous snapshot and the collection finishes in the background. On a workspace's first read, when no snapshot exists yet, the top bar shows **collecting** until the first collection completes — usually on the next cycle.
 
 ## Uptime Kuma
 
@@ -106,6 +137,8 @@ On Windows, the scripts use `N8N_API_KEY` from the environment or user registry.
 | `HTTP 404` | base URL without an extra path |
 | timeout | DNS, proxy, firewall, and reachability from the host/container |
 | lower counts | retention and the pagination limit shown in the UI |
+| top bar stuck on **collecting** | the workspace's first collection is running; if it persists, check n8n reachability and latency |
+| **Schedules** showing fewer rows than expected | workflow unpublished in n8n, trigger node disabled, or webhook-only workflow |
 | repeated webhook | write permission on the data directory |
 | Kuma without uptime | unavailable metric and missing public slug |
 
