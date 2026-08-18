@@ -18,6 +18,21 @@ Copy-paste file: [env.exemplo](env.exemplo). Do not commit a `.env` with real se
 | `N8N_API_KEY` | no | empty | seeds the first key on import |
 | `NODE_ENV` | Docker sets `production` | — | requires the secret when `production` |
 
+
+## Timing knobs
+
+Optional. Only touch these if n8n is slow enough that collection is frequently truncated; the defaults cover the normal case. Values in milliseconds.
+
+| Variable | Default | Purpose |
+|---|---:|---|
+| `N8N_MONITOR_TIMEOUT_MS` | `25000` | timeout for one n8n API call |
+| `N8N_MONITOR_TIMEOUT_CRON_MS` | `8000` | same, during the schedule sweep |
+| `N8N_MONITOR_LIMITE_RESPOSTA_MS` | `20000` | how long `GET /api/state` waits for the collection |
+| `N8N_MONITOR_ORCAMENTO_CRON_MS` | `15000` | schedule sweep budget per instance |
+| `N8N_MONITOR_ORCAMENTO_RECENTES_MS` | `15000` | execution pagination budget (Dashboard and Logs) |
+
+Raising a budget makes collection more complete and the response slower. None of them cancels work: whatever exceeds the deadline finishes in the background and lands in the next cycle.
+
 ## Local (Node)
 
 ```bash

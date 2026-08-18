@@ -111,12 +111,30 @@ Em falha, confira o resultado do item, logs do processo, DNS, certificado do des
 
 ## Backup
 
-Faça backup do diretório de dados ou do volume Docker:
+Use `npm run backup`, que grava uma cópia consistente com `VACUUM INTO` sem parar o painel:
 
 ```bash
+npm run backup                             # grava no diretório de dados, com carimbo de data
+npm run backup -- /caminho/copia.sqlite
+```
+
+No Docker:
+
+```bash
+docker compose exec monitor node dist/backup.js /data/copia.sqlite
+docker compose cp monitor:/data/copia.sqlite ./copia.sqlite
+```
+
+**Nao** use `tar` no diretório de dados com o processo rodando. O SQLite opera em modo WAL: o arquivo principal, o `-wal` e o `-shm` seriam copiados em instantes diferentes, e o resultado pode sair rasgado — o que só se descobre na hora de restaurar. Com o processo **parado**, o `tar` é seguro:
+
+```bash
+docker compose stop monitor
 docker run --rm -v n8n-monitor_n8n-monitor-data:/data -v "$PWD":/backup alpine \
   tar czf /backup/n8n-monitor-backup.tgz -C /data .
+docker compose start monitor
 ```
+
+Restaurar é copiar o arquivo de volta para `n8n-monitor.sqlite` com o painel parado.
 
 O backup contém segredos. Armazene-o criptografado e com acesso restrito.
 

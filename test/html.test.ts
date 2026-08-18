@@ -10,7 +10,7 @@ for (const arquivo of ['index.html', 'tarefas.html', 'dashboard.html', 'logs.htm
   })
 }
 
-for (const arquivo of ['theme.js', 'i18n.js', 'toasts.js', 'sessao.js']) {
+for (const arquivo of ['theme.js', 'i18n.js', 'toasts.js', 'sessao.js', 'rede.js']) {
   test(`${arquivo} possui sintaxe valida`, async () => {
     const codigo = await readFile(new URL(`../public/${arquivo}`, import.meta.url), 'utf8')
     new vm.Script(codigo, { filename: arquivo })

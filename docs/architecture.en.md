@@ -38,8 +38,14 @@ No route waits for a collection indefinitely.
 | n8n API call | 25s | that call fails |
 | Call during a schedule sweep | 8s | that workflow has no executions this round |
 | Schedule sweep per instance | 15s | partial result, revalidated in 1min |
+| Execution pagination (Dashboard and Logs) | 15s | returns fewer pages, flagged as truncated |
 | `GET /api/state` waiting on collection | 20s | returns the previous snapshot with `parcial: true`, or `motivo: "coletando"` |
+| Browser request | 25s | `rede.js` aborts and skips the cycle |
 | HTTP socket | 45s | server-side safety net |
+
+All tunable per environment: [variables](2.0/variaveis.en.md#timing-knobs).
+
+Each screen keeps at most **one** in-flight request per endpoint (`public/rede.js`). Without it, a `setInterval` over a slow backend piles up requests until the browser's per-origin connection limit is exhausted and the whole page freezes — not just the slow call.
 
 A collection that exceeds its deadline is **not** cancelled: it finishes in the background and fills the cache for the next read.
 
@@ -59,6 +65,7 @@ A collection that exceeds its deadline is **not** cancelled: it finishes in the 
 | `src/rdap.ts` | IANA service discovery and domain expiration |
 | `src/tarefas.ts` | statuses, notes, history, and recovery |
 | `src/webhook.ts` | deduplication, payloads, retries, and delivery |
+| `public/rede.js` | one in-flight request per endpoint, with a deadline |
 | `public/toasts.js` | toasts, Notification API, and Web Audio |
 
 ## Persistence

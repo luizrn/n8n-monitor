@@ -95,6 +95,7 @@
 </div></dialog>
 
 <script src="/i18n.js"></script>
+<script src="/rede.js"></script>
 <script src="/sessao.js"></script>
 <script>
 const $ = s => document.querySelector(s)
@@ -159,7 +160,8 @@ async function buscar(acumular){
   if (estado.modo.size) p.set('modo', [...estado.modo].join(','))
   if (estado.instancias.size) p.set('instancias', [...estado.instancias].join(','))
   try{
-    const d = await (await fetch('/api/logs?'+p, {cache:'no-store'})).json()
+    const d = await Rede.json('logs', '/api/logs?'+p, { forcar: true })
+    if (!d) return
     if (!d.ok){
       pintarStatus('ruim', d.motivo==='sem-chave' ? 'não configurado' : 'sem dados')
       $('#tb').innerHTML = `<tbody><tr><td class="vazio">Sem dados do n8n.</td></tr></tbody>`
@@ -180,7 +182,8 @@ async function buscar(acumular){
     $('#conta').textContent = `${nf(estado.itens.length)} de ${nf(d.total)} execuções`
     $('#resumo').textContent = `${nf(d.universo)} em memória${d.truncado?' (há mais no servidor)':''}`
     $('#btMais').hidden = estado.itens.length >= d.total
-  } catch {
+  } catch (e) {
+    if (Rede.abortado(e)) return
     pintarStatus('ruim','painel offline')
   }
 }

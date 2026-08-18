@@ -18,6 +18,21 @@ Arquivo copiável: [env.exemplo](env.exemplo). Não versione `.env` com secrets 
 | `N8N_API_KEY` | não | vazio | semeia a 1ª chave no import |
 | `NODE_ENV` | Docker define `production` | — | exige secret quando `production` |
 
+
+## Ajuste de tempos
+
+Opcionais. Só mexa se o n8n for lento a ponto de a coleta sair truncada com frequência; os padrões cobrem o caso normal. Valores em milissegundos.
+
+| Variável | Padrão | Uso |
+|---|---:|---|
+| `N8N_MONITOR_TIMEOUT_MS` | `25000` | timeout de uma chamada à API do n8n |
+| `N8N_MONITOR_TIMEOUT_CRON_MS` | `8000` | idem, durante a varredura de agendamentos |
+| `N8N_MONITOR_LIMITE_RESPOSTA_MS` | `20000` | quanto `GET /api/state` espera pela coleta |
+| `N8N_MONITOR_ORCAMENTO_CRON_MS` | `15000` | orçamento da varredura de agendamentos por instância |
+| `N8N_MONITOR_ORCAMENTO_RECENTES_MS` | `15000` | orçamento da paginação de execuções (Dashboard e Logs) |
+
+Aumentar um orçamento deixa a coleta mais completa e a resposta mais lenta. Nenhum deles cancela trabalho: o que passa do prazo termina em segundo plano e entra no próximo ciclo.
+
 ## Local (Node)
 
 ```bash

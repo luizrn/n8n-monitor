@@ -6,10 +6,21 @@ All notable changes will be recorded here. The project follows [Keep a Changelog
 
 ## Unreleased
 
+### Added
+
+- `npm run backup`: consistent SQLite copy with `VACUUM INTO`, without stopping the dashboard. Hot `tar` of the data directory is not safe in WAL mode and the documentation was corrected.
+- `test/coleta.test.ts`: 7 tests covering the response deadline, the schedule sweep budget, the per-execution detail cache, and concurrent-call dedup. `coleta.ts` had no coverage at all.
+- a one-line log per collection (workspace, duration, instances, schedules) so slowness can be investigated without reproducing it externally.
+- optional timing knobs (`N8N_MONITOR_TIMEOUT_MS`, `N8N_MONITOR_LIMITE_RESPOSTA_MS`, `N8N_MONITOR_ORCAMENTO_CRON_MS`, and others).
+- `public/rede.js`: one in-flight request per endpoint, with a deadline, shared by all four screens.
+
 - Workspace tab laid out in blocks, with a field to rename the active workspace.
 - a new workspace no longer inherits config, tokens, or connections from legacy JSON or another workspace.
 
 ### Fixed
+
+- **`/api/dashboard` and `/api/logs` had the same freeze as Monitor**: a 7-day Dashboard requested 60 sequential pages per instance, with no deadline, and the screens had no in-flight guard. Pagination now has a budget and returns fewer rows flagged as truncated.
+- the production Docker image no longer carries devDependencies: `tsc`, `tsx`, and `esbuild` were shipped to the runtime.
 
 - **workspace switching stuck on "Turning the cranks..."**: `GET /api/state` had no response deadline. With a slow n8n, dashboard requests piled up until the browser's per-origin connection limit was exhausted and the whole page froze — including for users on a different workspace.
 - failed execution details are now cached by `executionId`. Previously up to ten executions were downloaded with full data, sequentially, on every collection cycle — making the workspace with the most errors the slowest one.
@@ -18,6 +29,8 @@ All notable changes will be recorded here. The project follows [Keep a Changelog
 - tasks and webhook state are no longer re-read from SQLite every cycle; that re-read could discard a change made between the in-memory mutation and its write.
 
 ### Changed
+
+- **Schedules** now says when the 40-workflow-per-instance cap truncates the list (`limitado`), instead of showing 40 as if it were everything.
 
 - background collection moved from a fixed 10s to 15s for a workspace in use and 60s for an idle one (no authenticated request for over 5 minutes).
 - **Schedules** now lists only workflows published and active in n8n, with an enabled time trigger. The `inativo` verdict is gone; webhook-only workflows stay out, and workflows with both a webhook and a cron stay in. Less noise on screen and a shorter sweep.

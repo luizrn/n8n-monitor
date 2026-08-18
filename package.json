@@ -10,19 +10,21 @@
   },
   "scripts": {
     "compile": "tsc",
-    "prebuild": "npm run test:unit && npm run test:html && npm run test:docs",
+    "prebuild": "npm run test:unit && npm run test:coleta && npm run test:html && npm run test:docs",
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "tsx src/server.ts",
     "test": "tsx --test --test-concurrency=1 test/**/*.test.ts",
     "test:unit": "tsx --test test/alertas.test.ts test/rdap.test.ts test/seguranca.test.ts test/tarefas.test.ts test/uptime.test.ts test/webhook.test.ts",
+    "test:coleta": "tsx --test --test-concurrency=1 test/coleta.test.ts",
     "test:server": "tsx --test --test-concurrency=1 test/server.test.ts",
     "test:html": "tsx --test test/html.test.ts test/i18n.test.ts",
     "test:docs": "tsx --test test/docs.test.ts",
     "test:file": "tsx --test",
     "check": "tsc --noEmit",
     "diag": "tsx scripts/diag-exec.ts",
-    "dump": "tsx scripts/dump-wf.ts"
+    "dump": "tsx scripts/dump-wf.ts",
+    "backup": "tsx src/backup.ts"
   },
   "dependencies": {
     "better-auth": "^1.3.4"

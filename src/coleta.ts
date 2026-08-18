@@ -3,7 +3,7 @@ import {
   chaveLimite, instanciasAtivas, instanciaPorId, publica, saneaInstancia,
 } from './config.js'
 import { gatilhosDe, regraParaCron, descreverRegra, esperadas, comparar } from './cron.js'
-import { acharFalha, clienteDe, criarCliente, TEMPO_LIMITE_CURTO_MS } from './instancias.js'
+import { acharFalha, clienteDe, criarCliente, msDoAmbiente, TEMPO_LIMITE_CURTO_MS } from './instancias.js'
 import { criarResolvedorRdap } from './rdap.js'
 import { redigir, redigirTexto } from './seguranca.js'
 import { coletarUptime } from './uptime.js'
@@ -12,11 +12,14 @@ import type { RepoTarefas } from './tarefas.js'
 import type { DispatcherWebhook } from './webhook.js'
 
 const JANELA_MS = 3600000
+
 // teto do que uma resposta HTTP espera pela coleta; o que passar disso termina em segundo plano
-const LIMITE_RESPOSTA_MS = 20000
+const LIMITE_RESPOSTA_MS = msDoAmbiente('N8N_MONITOR_LIMITE_RESPOSTA_MS', 20000)
+const ORCAMENTO_CRON_MS = msDoAmbiente('N8N_MONITOR_ORCAMENTO_CRON_MS', 15000)
+const ORCAMENTO_RECENTES_MS = msDoAmbiente('N8N_MONITOR_ORCAMENTO_RECENTES_MS', 15000)
 const VALIDADE_CRON_MS = 300000
 const VALIDADE_CRON_PARCIAL_MS = 60000
-const ORCAMENTO_CRON_MS = 15000
+const MAX_FLUXOS_CRON = 40
 const ehErro = (s: string) => s === 'error' || s === 'crashed'
 const ORDEM_VER: Record<string, number> = {
   'nunca-executou': 0, 'com-falhas': 1, 'sem-dados': 2, 'nao-comparavel': 3,
@@ -32,7 +35,7 @@ export type Runtime = {
   pronto: Promise<void>
   ultimoUso: number
   cacheCompleto: { em: number; dados: Record<string, unknown> | null }
-  cacheCron: Map<string, { em: number; linhas: Record<string, unknown>[]; parcial: boolean }>
+  cacheCron: Map<string, { em: number; linhas: Record<string, unknown>[]; parcial: boolean; limitado: boolean; avaliados: number }>
   cronEmCurso: Map<string, Promise<Record<string, unknown>[]>>
   cacheUptime: { em: number; dados: Record<string, unknown> | null }
   coletaEmCurso: Promise<Record<string, unknown>> | null
@@ -243,7 +246,10 @@ async function calcularCron(rt: Runtime, inst: Config['instancias'][number]) {
   // O teto de 40 fluxos e limite de projeto, e repetir a varredura nao o eleva.
   const linhas: Record<string, unknown>[] = []
   let parcial = false
-  for (const { wf, gats } of alvos.slice(0, 40)) {
+  // limitado avisa que o teto de fluxos cortou a lista; parcial, que o tempo cortou.
+  // Sao coisas diferentes: repetir a varredura resolve a segunda, nunca a primeira.
+  const limitado = alvos.length > MAX_FLUXOS_CRON
+  for (const { wf, gats } of alvos.slice(0, MAX_FLUXOS_CRON)) {
     if (Date.now() > prazo) { parcial = true; break }
     const tz = wf.settings?.timezone && wf.settings.timezone !== 'DEFAULT'
       ? wf.settings.timezone : rt.config.fuso
@@ -327,7 +333,7 @@ async function calcularCron(rt: Runtime, inst: Config['instancias'][number]) {
     }
   }
 
-  rt.cacheCron.set(inst.id, { em: Date.now(), linhas, parcial })
+  rt.cacheCron.set(inst.id, { em: Date.now(), linhas, parcial, limitado, avaliados: alvos.length })
   return linhas
 }
 
@@ -369,6 +375,9 @@ export async function conferirAgendamentos(rt: Runtime) {
     toleranciaMin: rt.config.toleranciaMin,
     fusoPadrao: rt.config.fuso,
     parcial: ativas.some((inst) => rt.cacheCron.get(inst.id)?.parcial === true),
+    limitado: ativas.some((inst) => rt.cacheCron.get(inst.id)?.limitado === true),
+    tetoFluxos: MAX_FLUXOS_CRON,
+    fluxosAgendados: ativas.reduce((n, inst) => n + (rt.cacheCron.get(inst.id)?.avaliados || 0), 0),
     linhas,
   }
 }
@@ -384,6 +393,7 @@ export async function uptimeAtual(rt: Runtime, forcar = false) {
 }
 
 async function executarColeta(rt: Runtime, forcar: boolean): Promise<Record<string, unknown>> {
+  const inicio = Date.now()
   const [estado, cron, uptime] = await Promise.all([
     montarEstado(rt),
     conferirAgendamentos(rt).catch((e) => ({ ok: false, motivo: 'erro', detalhe: String((e as Error).message || e), linhas: [] })),
@@ -419,8 +429,24 @@ async function executarColeta(rt: Runtime, forcar: boolean): Promise<Record<stri
     tarefasContagem: rt.repoTarefas.contagem(),
   }
   rt.cacheCompleto = { em: Date.now(), dados }
+  registrarTempo(rt, Date.now() - inicio, estado, cron)
   rt.webhook.processar(alertasAtivos as Record<string, unknown>[], podeResolver).catch((e) => console.error('webhook:', (e as Error).message || e))
   return dados
+}
+
+// Uma linha por coleta. Sem isto, "o painel esta lento" nao tem como ser investigado
+// sem reproduzir o problema por fora.
+function registrarTempo(rt: Runtime, ms: number, estado: { instancias?: unknown[]; inalcancaveis?: unknown[] }, cron: { parcial?: boolean; limitado?: boolean; linhas?: unknown[] }) {
+  const marcas = [
+    `coleta org=${rt.orgId.slice(0, 8)}`,
+    `${ms}ms`,
+    `instancias=${estado.instancias?.length ?? 0}`,
+    `inalcancaveis=${estado.inalcancaveis?.length ?? 0}`,
+    `cron=${cron.linhas?.length ?? 0}`,
+  ]
+  if (cron.parcial) marcas.push('cron-parcial')
+  if (cron.limitado) marcas.push('cron-limitado')
+  console.log(marcas.join(' '))
 }
 
 // nunca segura a resposta HTTP indefinidamente: passado o prazo devolve o snapshot anterior
@@ -459,10 +485,14 @@ export function percentil(valores: number[], p: number) {
   return v[Math.min(v.length - 1, Math.floor((p / 100) * v.length))]
 }
 
+// Dashboard de 7 dias pede 60 paginas por instancia, em serie. Sem orcamento isso prende
+// a resposta pelo mesmo motivo que prendia /api/state: a tela recebe menos dados, marcados
+// como truncados, em vez de nao receber nada.
 export async function recentesDeTodas(rt: Runtime, paginas = 10) {
+  const prazo = Date.now() + ORCAMENTO_RECENTES_MS
   const ativas = instanciasAtivas(rt.config)
   const lotes = await Promise.all(ativas.map(async (inst) => {
-    try { return await clienteDe(inst, rt.orgId).listarRecentes(paginas) } catch { return null }
+    try { return await clienteDe(inst, rt.orgId).listarRecentes(paginas, { prazo }) } catch { return null }
   }))
   const itens = lotes.filter(Boolean).flatMap((l) => l!.itens)
     .sort((a, b) => new Date(String(b.inicio || 0)).getTime() - new Date(String(a.inicio || 0)).getTime())

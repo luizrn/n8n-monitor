@@ -10,6 +10,8 @@ window.I18n = (() => {
     'Logs — Monitor n8n': 'Logs — n8n Monitor',
     'carregando': 'loading', 'carregando…': 'loading…', 'Girando manivelas...': 'Turning the cranks...', 'conectando': 'connecting',
     'coletando': 'collecting',
+    'mostrando {teto} de {total} fluxos agendados': 'showing {teto} of {total} scheduled workflows',
+    'varredura parcial: atualizando': 'partial sweep: refreshing',
     'conectado': 'connected', 'painel offline': 'dashboard offline', 'não configurado': 'not configured',
     'sem dados': 'no data', 'tudo ok': 'all good', 'erro': 'error', 'atenção': 'attention',
     'precisa de atenção': 'needs attention', 'precisam de atenção': 'need attention', 'Tudo em ordem': 'All clear',

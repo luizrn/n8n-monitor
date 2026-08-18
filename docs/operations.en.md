@@ -111,14 +111,32 @@ On failure, inspect the item result, process logs, DNS, destination certificate,
 
 ## Backup
 
-Back up the data directory or Docker volume:
+Use `npm run backup`, which writes a consistent copy with `VACUUM INTO` without stopping the dashboard:
 
 ```bash
-docker run --rm -v n8n-monitor_n8n-monitor-data:/data -v "$PWD":/backup alpine \
-  tar czf /backup/n8n-monitor-backup.tgz -C /data .
+npm run backup                             # writes to the data directory, timestamped
+npm run backup -- /path/copy.sqlite
 ```
 
-The backup contains secrets. Encrypt it and restrict access.
+On Docker:
+
+```bash
+docker compose exec monitor node dist/backup.js /data/copy.sqlite
+docker compose cp monitor:/data/copy.sqlite ./copy.sqlite
+```
+
+Do **not** `tar` the data directory while the process is running. SQLite runs in WAL mode: the main file, the `-wal`, and the `-shm` would be copied at different instants, and the result can come out torn — which you only discover when restoring. With the process **stopped**, `tar` is safe:
+
+```bash
+docker compose stop monitor
+docker run --rm -v n8n-monitor_n8n-monitor-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/n8n-monitor-backup.tgz -C /data .
+docker compose start monitor
+```
+
+Restoring is copying the file back to `n8n-monitor.sqlite` with the dashboard stopped.
+
+The backup contains secrets. Store it encrypted with restricted access.
 
 ## Diagnostics
 

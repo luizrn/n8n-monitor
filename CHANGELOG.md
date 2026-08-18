@@ -6,10 +6,21 @@ Todas as mudanças relevantes serão registradas aqui. O projeto segue [Keep a C
 
 ## Unreleased
 
+### Adicionado
+
+- `npm run backup`: cópia consistente do SQLite com `VACUUM INTO`, sem parar o painel. O `tar` a quente do diretório de dados não é seguro em modo WAL e a documentação foi corrigida.
+- `test/coleta.test.ts`: 7 testes cobrindo prazo de resposta, orçamento da varredura de agendamentos, cache de detalhe por execução e dedup de chamadas simultâneas. `coleta.ts` não tinha cobertura nenhuma.
+- log de uma linha por coleta (workspace, duração, instâncias, cron) para poder investigar lentidão sem reproduzir o problema por fora.
+- variáveis opcionais de ajuste de tempo (`N8N_MONITOR_TIMEOUT_MS`, `N8N_MONITOR_LIMITE_RESPOSTA_MS`, `N8N_MONITOR_ORCAMENTO_CRON_MS`, entre outras).
+- `public/rede.js`: uma requisição em voo por endpoint, com prazo, compartilhado pelas quatro telas.
+
 - aba Workspace reorganizada, com campo para renomear o workspace ativo.
 - workspace novo não herda config, tokens nem conexões do JSON legado nem de outro workspace.
 
 ### Corrigido
+
+- **`/api/dashboard` e `/api/logs` tinham o mesmo travamento do Monitor**: o Dashboard de 7 dias pedia 60 páginas em série por instância, sem prazo, e as telas não tinham guarda de requisição em voo. Agora a paginação tem orçamento e devolve menos dados marcados como truncados.
+- imagem Docker de produção não carrega mais as devDependencies: `tsc`, `tsx` e `esbuild` ficavam no runtime.
 
 - **troca de workspace travando em "Girando manivelas..."**: `GET /api/state` não tinha prazo de resposta. Com um n8n lento, as requisições do painel se acumulavam até esgotar o limite de conexões por origem do navegador e congelar a página inteira, inclusive para quem estava em outro workspace.
 - detalhe de execução com erro passa a ser guardado por `executionId`. Antes, até dez execuções eram baixadas com dados completos, em série, a cada ciclo de coleta — o workspace com mais erros era o mais lento.
@@ -18,6 +29,8 @@ Todas as mudanças relevantes serão registradas aqui. O projeto segue [Keep a C
 - tarefas e estado do webhook deixam de ser relidos do SQLite a cada ciclo; a releitura podia descartar uma alteração feita entre a mutação em memória e a gravação.
 
 ### Alterado
+
+- **Agendamentos** avisa quando o teto de 40 fluxos por instância corta a lista (`limitado`), em vez de mostrar 40 como se fosse tudo.
 
 - coleta de fundo passou de 10s fixos para 15s em workspace em uso e 60s em workspace ocioso (sem requisição autenticada há mais de 5 minutos).
 - **Agendamentos** passa a listar apenas fluxos publicados e ativos no n8n, com gatilho de tempo habilitado. O veredito `inativo` deixou de existir; fluxo só de webhook continua fora, e fluxo com webhook e cron continua dentro. Menos ruído na tela e varredura mais curta.

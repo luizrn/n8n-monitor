@@ -26,9 +26,10 @@ A constante `VERSAO` em `src/versao.ts` (hoje `2.0.0`) aparece em `package.json`
 | `npm run check` | `tsc --noEmit` |
 | `npm run diag -- ID` | diagnóstico de execução |
 | `npm run dump -- WORKFLOW_ID` | dump de workflow |
+| `npm run backup [-- destino]` | cópia consistente do SQLite (`VACUUM INTO`) |
 
 ## Docker
 
-Imagem multi-stage Node 22 Alpine: `npm ci && tsc`, `CMD node dist/server.js`, usuário `node`, volume `/data`, health `GET /api/health`. Compose publica só `127.0.0.1:8787`.
+Imagem multi-stage Node 22 Alpine em três estágios: `build` roda `npm ci`, os testes e o `tsc`; `deps` resolve `npm ci --omit=dev`; o estágio final junta `dist/`, `public/` e só as dependências de produção — compilador, `tsx` e `esbuild` não viajam para o runtime. `CMD node dist/server.js`, usuário `node`, volume `/data`, health `GET /api/health`. Compose publica só `127.0.0.1:8787`.
 
 Em produção (`NODE_ENV=production`) o secret é obrigatório. O `compose.yaml` local já define um `BETTER_AUTH_SECRET` de desenvolvimento — troque-o se o Compose não for só loopback.

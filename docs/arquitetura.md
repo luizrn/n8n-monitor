@@ -40,8 +40,14 @@ Nenhuma rota espera a coleta indefinidamente.
 | Chamada à API do n8n | 25s | erro naquela chamada |
 | Chamada durante varredura de agendamentos | 8s | o fluxo fica sem execuções nesta rodada |
 | Varredura de agendamentos por instância | 15s | resultado parcial, revalidado em 1min |
+| Paginação de execuções (Dashboard e Logs) | 15s | devolve menos páginas, marcadas como truncadas |
 | Espera de `GET /api/state` pela coleta | 20s | devolve o snapshot anterior com `parcial: true`, ou `motivo: "coletando"` |
+| Requisição do navegador | 25s | `rede.js` aborta e pula o ciclo |
 | Socket HTTP | 45s | rede de segurança do servidor |
+
+Todos ajustáveis por ambiente: [variáveis](2.0/variaveis.md#ajuste-de-tempos).
+
+Cada tela mantém no máximo **uma** requisição em voo por endpoint (`public/rede.js`). Sem isso, um `setInterval` sobre um backend lento empilha pedidos até estourar o limite de conexões por origem do navegador, e a página inteira congela — não só a chamada lenta.
 
 A coleta que estoura o prazo **não** é cancelada: ela termina em segundo plano e preenche o cache para a próxima leitura.
 
@@ -61,6 +67,7 @@ A coleta que estoura o prazo **não** é cancelada: ela termina em segundo plano
 | `src/rdap.ts` | descoberta do serviço IANA e expiração de domínio |
 | `src/tarefas.ts` | estados, notas, histórico e recuperação |
 | `src/webhook.ts` | deduplicação, payload, retry e entrega |
+| `public/rede.js` | uma requisição em voo por endpoint, com prazo |
 | `public/toasts.js` | toast, Notification API e Web Audio |
 
 ## Persistência

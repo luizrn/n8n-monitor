@@ -1,9 +1,16 @@
 import { createHash } from 'node:crypto'
 import type { Instancia } from './tipos.js'
 
-export const TEMPO_LIMITE_MS = 25000
+// Tempos ajustaveis por ambiente: um n8n muito lento pode precisar de mais folga,
+// e os testes precisam de menos. Fora isso, os padroes valem.
+export const msDoAmbiente = (nome: string, padrao: number) => {
+  const v = Number(process.env[nome])
+  return Number.isFinite(v) && v > 0 ? v : padrao
+}
+
+export const TEMPO_LIMITE_MS = msDoAmbiente('N8N_MONITOR_TIMEOUT_MS', 25000)
 // varredura de agendamentos percorre dezenas de fluxos: espera menos por chamada
-export const TEMPO_LIMITE_CURTO_MS = 8000
+export const TEMPO_LIMITE_CURTO_MS = msDoAmbiente('N8N_MONITOR_TIMEOUT_CRON_MS', 8000)
 const VALIDADE_NOMES_MS = 300000
 const VALIDADE_LISTA_MS = 30000
 const MAX_DETALHES = 500
@@ -134,16 +141,21 @@ export function criarCliente(inst: Instancia) {
     return id
   }
 
-  async function paginarExecucoes(query: string, { paginas = 6, ate = null as number | null, tempoLimiteMs = TEMPO_LIMITE_MS } = {}) {
+  // prazo e um instante absoluto: a paginacao para no limite e devolve o que ja tem,
+  // marcado como truncado, em vez de manter uma resposta HTTP presa por dezenas de paginas.
+  async function paginarExecucoes(query: string, { paginas = 6, ate = null as number | null, tempoLimiteMs = TEMPO_LIMITE_MS, prazo = 0 } = {}) {
     const itens: ExecucaoN8n[] = []
     let cursor: string | null = null
     let alcancou = false
+    let lidas = 0
     for (let p = 0; p < paginas; p++) {
+      if (prazo && Date.now() > prazo) break
       const q = `/api/v1/executions?limit=250&${query}` +
         (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '')
       const r = await chamar(q, { tempoLimiteMs }) as { data?: ExecucaoN8n[]; nextCursor?: string | null }
       const lote = r.data || []
       itens.push(...lote)
+      lidas++
       cursor = r.nextCursor || null
       if (!cursor || !lote.length) { alcancou = true; break }
       if (ate) {
@@ -151,13 +163,13 @@ export function criarCliente(inst: Instancia) {
         if (maisVelho && new Date(maisVelho).getTime() < ate) { alcancou = true; break }
       }
     }
-    return { itens, truncado: Boolean(cursor), cobriu: ate ? alcancou : !cursor }
+    return { itens, truncado: Boolean(cursor), cobriu: ate ? alcancou : !cursor, lidas }
   }
 
-  async function listarRecentes(paginas = 10) {
+  async function listarRecentes(paginas = 10, { prazo = 0 } = {}) {
     const valido = Date.now() - cacheLista.em < VALIDADE_LISTA_MS && cacheLista.itens.length
     if (valido && cacheLista.paginas >= paginas) return cacheLista
-    const { itens, truncado, cobriu } = await paginarExecucoes('', { paginas })
+    const { itens, truncado, cobriu, lidas } = await paginarExecucoes('', { paginas, prazo })
     await nomesDeFluxos()
     const enriquecidos = itens.map((e) => ({
       id: e.id,
@@ -173,7 +185,7 @@ export function criarCliente(inst: Instancia) {
       instanciaId: inst.id,
       instancia: inst.nome,
     }))
-    cacheLista = { em: Date.now(), itens: enriquecidos, truncado, cobriu, paginas }
+    cacheLista = { em: Date.now(), itens: enriquecidos, truncado, cobriu, paginas: lidas }
     return cacheLista
   }
 

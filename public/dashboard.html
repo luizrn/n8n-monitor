@@ -83,6 +83,7 @@
 </div>
 
 <script src="/i18n.js"></script>
+<script src="/rede.js"></script>
 <script src="/sessao.js"></script>
 <script>
 const $ = s => document.querySelector(s)
@@ -170,7 +171,8 @@ function filtrosInst(d){
 async function puxar(){
   try{
     const p=new URLSearchParams({horas:String(horas)});if(instancias.size)p.set('instancias',[...instancias].join(','))
-    const d = await (await fetch('/api/dashboard?'+p,{cache:'no-store'})).json()
+    const d = await Rede.json('dashboard','/api/dashboard?'+p)
+    if(!d)return
     if(!d.ok){
       pintarStatus('ruim', d.motivo==='sem-chave'?'não configurado':'sem dados')
       return

@@ -26,9 +26,10 @@ The `VERSAO` constant in `src/versao.ts` (currently `2.0.0`) appears in `package
 | `npm run check` | `tsc --noEmit` |
 | `npm run diag -- ID` | execution diagnostics |
 | `npm run dump -- WORKFLOW_ID` | workflow dump |
+| `npm run backup [-- target]` | consistent SQLite copy (`VACUUM INTO`) |
 
 ## Docker
 
-Multi-stage Node 22 Alpine image: `npm ci && tsc`, `CMD node dist/server.js`, `node` user, `/data` volume, health `GET /api/health`. Compose publishes only `127.0.0.1:8787`.
+Three-stage Node 22 Alpine image: `build` runs `npm ci`, the tests, and `tsc`; `deps` resolves `npm ci --omit=dev`; the final stage combines `dist/`, `public/`, and production dependencies only — the compiler, `tsx`, and `esbuild` never reach the runtime. `CMD node dist/server.js`, `node` user, `/data` volume, health `GET /api/health`. Compose publishes only `127.0.0.1:8787`.
 
 In production (`NODE_ENV=production`) the secret is required. Local `compose.yaml` already sets a development `BETTER_AUTH_SECRET` — change it if Compose is not loopback-only.
