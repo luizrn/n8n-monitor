@@ -16,6 +16,7 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run test:unit
+      - run: npm run test:coleta
       - run: npm run test:html
       - run: npm run test:docs
       - run: npm run test:server
